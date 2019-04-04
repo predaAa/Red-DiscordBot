@@ -96,7 +96,7 @@ async def menu(
             await message.clear_reactions()
         except discord.Forbidden:  # cannot remove all reactions
             for key in controls.keys():
-                await message.remove_reaction(key, ctx.bot.user)
+                await message.remove_reaction(key, ctx.me)
         except discord.NotFound:
             return
     else:
