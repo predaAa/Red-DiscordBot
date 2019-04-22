@@ -302,7 +302,7 @@ class Core(commands.Cog, CoreLogic):
     @commands.command(hidden=True)
     async def ping(self, ctx: commands.Context):
         """Pong."""
-        await ctx.send("Pong.")
+        await ctx.send("Beep Boop.")
 
     @commands.command()
     async def info(self, ctx: commands.Context):
