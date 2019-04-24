@@ -263,7 +263,8 @@ class General(commands.Cog):
 
         This uses the unofficial Urban Dictionary API.
         """
-
+        if not ctx.message.channel.is_nsfw():
+            return await ctx.send("\N{LOCK} You can't use that command here")
         try:
             url = "https://api.urbandictionary.com/v0/define?term=" + str(word).lower()
 
