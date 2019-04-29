@@ -2,7 +2,7 @@
   <br>
   <a href="https://github.com/Cog-Creators/Red-DiscordBot/tree/V3/develop"><img src="https://imgur.com/pY1WUFX.png" alt="Red - Discord Bot"></a>
   <br>
-  Red Discord Bot
+  BB-8 Discord Bot (based on Red Discord Bot)
   <br>
 </h1>
 
@@ -53,6 +53,12 @@
   •
   <a href="#license">License</a>
 </p>
+
+<p align="center">
+<a href="https://discordbots.org/bot/540694922307698690" >
+  <img src="https://discordbots.org/api/widget/540694922307698690.svg" alt="BB-8" />
+</a>
+<p>
 
 # Overview
 
