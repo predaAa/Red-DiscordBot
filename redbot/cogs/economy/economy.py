@@ -571,11 +571,11 @@ class Economy(commands.Cog):
 
         slot = "~~\n~~"  # Mobile friendly
         for i, row in enumerate(rows):  # Let's build the slot to show
-            sign = "  "
+            sign = "║  "
             if i == 1:
-                sign = ">"
-            slot += "{}{} {} {}\n".format(
-                sign, *[c.value for c in row]  # pylint: disable=no-member
+                sign = "║◄"
+            slot += "║ {} ¦ {} ¦ {} {}\n".format(
+                *[c.value for c in row], sign   # pylint: disable=no-member
             )
 
         payout = PAYOUTS.get(rows[1])
