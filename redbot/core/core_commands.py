@@ -1748,15 +1748,9 @@ class Core(commands.Cog, CoreLogic):
         Adds a user or role to the whitelist.
         """
         user = isinstance(user_or_role, discord.Member)
-<<<<<<< HEAD
-        async with ctx.bot.db.guild(ctx.guild).whitelist() as curr_list:
-            if obj.id not in curr_list:
-                curr_list.append(obj.id)
-=======
         async with ctx.bot._config.guild(ctx.guild).whitelist() as curr_list:
             if user_or_role.id not in curr_list:
                 curr_list.append(user_or_role.id)
->>>>>>> develop
 
         if user:
             await ctx.send(_("User added to whitelist."))
@@ -1787,13 +1781,8 @@ class Core(commands.Cog, CoreLogic):
         user = isinstance(user_or_role, discord.Member)
 
         removed = False
-<<<<<<< HEAD
-        async with ctx.bot.db.guild(ctx.guild).whitelist() as curr_list:
-            if obj.id in curr_list:
-=======
         async with ctx.bot._config.guild(ctx.guild).whitelist() as curr_list:
             if user_or_role.id in curr_list:
->>>>>>> develop
                 removed = True
                 curr_list.remove(obj.id)
 
@@ -1838,15 +1827,9 @@ class Core(commands.Cog, CoreLogic):
             await ctx.send(_("You cannot blacklist an owner!"))
             return
 
-<<<<<<< HEAD
-        async with ctx.bot.db.guild(ctx.guild).blacklist() as curr_list:
-            if obj.id not in curr_list:
-                curr_list.append(obj.id)
-=======
         async with ctx.bot._config.guild(ctx.guild).blacklist() as curr_list:
             if user_or_role.id not in curr_list:
                 curr_list.append(user_or_role.id)
->>>>>>> develop
 
         if user:
             await ctx.send(_("User added to blacklist."))
@@ -1877,13 +1860,8 @@ class Core(commands.Cog, CoreLogic):
         removed = False
         user = isinstance(user_or_role, discord.Member)
 
-<<<<<<< HEAD
-        async with ctx.bot.db.guild(ctx.guild).blacklist() as curr_list:
-            if obj.id in curr_list:
-=======
         async with ctx.bot._config.guild(ctx.guild).blacklist() as curr_list:
             if user_or_role.id in curr_list:
->>>>>>> develop
                 removed = True
                 curr_list.remove(obj.id)
 
