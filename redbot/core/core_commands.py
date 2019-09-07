@@ -1247,8 +1247,6 @@ class Core(commands.Cog, CoreLogic):
         await ctx.bot._config.help.page_char_limit.set(limit)
         await ctx.send(_("Done. The character limit per page has been set to {}.").format(limit))
 
-<<<<<<< HEAD
-=======
     @helpset.command(name="maxpages")
     async def helpset_maxpages(self, ctx: commands.Context, pages: int):
         """Set the maximum number of help pages sent in a server channel.
@@ -1268,7 +1266,6 @@ class Core(commands.Cog, CoreLogic):
         await ctx.bot._config.help.max_pages_in_guild.set(pages)
         await ctx.send(_("Done. The page limit has been set to {}.").format(pages))
 
->>>>>>> develop
     @helpset.command(name="tagline")
     async def helpset_tagline(self, ctx: commands.Context, *, tagline: str = None):
         """
