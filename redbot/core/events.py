@@ -192,15 +192,19 @@ def init_events(bot, cli_flags):
                 exc_info=error.original,
             )
 
-            message = "Error in command '{}'. Check your console or logs for details.".format(
-                ctx.command.qualified_name
+            message = "```py" + "\n"
+            message += "Error in command '{}'\nType: {}\nThe Bot owner has recieved your error.".format(
+                ctx.command.qualified_name, error.original
             )
+            message += "```" + "\n"
+            message += "Use the ``b!support`` command \nThen join the support server and the owner of the bot or a mod will help you when they are available"
+            
             exception_log = "Exception in command '{}'\n" "".format(ctx.command.qualified_name)
             exception_log += "".join(
                 traceback.format_exception(type(error), error, error.__traceback__)
             )
             bot._last_exception = exception_log
-            await ctx.send(inline(message))
+            await ctx.send(message)
         elif isinstance(error, commands.CommandNotFound):
             fuzzy_commands = await fuzzy_command_search(
                 ctx,
