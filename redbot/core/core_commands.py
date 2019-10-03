@@ -349,7 +349,7 @@ class Core(commands.Cog, CoreLogic):
             embed.add_field(name=_("About this instance"), value=custom_info, inline=False)
         embed.add_field(name=_("About Red"), value=about, inline=False)
 
-        embed.set_image(url="https://photos.kstj.us/WobblySiennaSponge.png")
+        embed.set_image(url="https://i.imgur.com/BLClEw2.png")
 
         embed.set_footer(
             text=_("Bringing joy since 02 Jan 2016 (over {} days ago!)").format(days_since)
