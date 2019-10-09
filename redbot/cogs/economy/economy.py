@@ -373,7 +373,7 @@ class Economy(commands.Cog):
                         .format(currency=credits_name, new_balance=humanize_number(exc.max_balance)), color= await ctx.embed_color()
                     )
 
-                    embed.set_thumbnail(url="https://photos.kstj.us/SubmissiveEverlastingStork.png")
+                    embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
                     embed.set_footer(
                         text="{}".format(embed_tagline)
                     )
@@ -397,7 +397,7 @@ class Economy(commands.Cog):
                     ), color= await ctx.embed_color()
                 )
 
-                embed.set_thumbnail(url="https://photos.kstj.us/SubmissiveEverlastingStork.png")
+                embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
                 embed.set_footer(
                     text="{}".format(embed_tagline)
                 )
@@ -409,7 +409,7 @@ class Economy(commands.Cog):
                     description="\N{CROSS MARK} {author.mention} Too soon.\n\n For your next payday you have to wait {time}."
                     .format(author=author, time=dtime), color= await ctx.embed_color()
                 )
-                embed.set_thumbnail(url="https://photos.kstj.us/SubmissiveEverlastingStork.png")
+                embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
                 await ctx.send(embed=embed)
         else:
             next_payday = await self.config.member(author).next_payday()
@@ -432,7 +432,7 @@ class Economy(commands.Cog):
                         .format(currency=credits_name, new_balance=humanize_number(exc.max_balance)), 
                         color= await ctx.embed_color()
                     )
-                    embed.set_thumbnail(url="https://photos.kstj.us/SubmissiveEverlastingStork.png")
+                    embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
                     embed.set_footer(
                         text="{}".format(embed_tagline)
                     )
@@ -454,7 +454,7 @@ class Economy(commands.Cog):
                         pos=humanize_number(pos) if pos else pos,
                     ), color= await ctx.embed_color()
                 )
-                embed.set_thumbnail(url="https://photos.kstj.us/SubmissiveEverlastingStork.png")
+                embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
                 embed.set_footer(
                     text="{}".format(embed_tagline)
                 )
@@ -640,7 +640,7 @@ class Economy(commands.Cog):
                         new_balance=humanize_number(exc.max_balance),
                     ), color= 0x49ff00
                 )
-                embed.set_thumbnail(url="https://photos.kstj.us/SubmissiveEverlastingStork.png")
+                embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
                 embed.set_footer(
                     text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
                 )
@@ -671,7 +671,7 @@ class Economy(commands.Cog):
                 pay=humanize_number(pay),
                 )
         )
-        embed.set_thumbnail(url="https://photos.kstj.us/SubmissiveEverlastingStork.png")
+        embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
         embed.set_footer(
             text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
                 )
