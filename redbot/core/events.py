@@ -200,7 +200,7 @@ def init_events(bot, cli_flags):
             )
 
             message = "```py" + "\n"
-            message += "Error in command '{}'\nType: {}\nThe Bot owner has recieved your error.".format(
+            message += "Error in command '{}'\nType: {}\nThe Bot owner has received your error.".format(
                 ctx.command.qualified_name, error.original
             )
             message += "```" + "\n"
