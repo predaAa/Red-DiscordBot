@@ -35,7 +35,8 @@ from redbot.core.utils.menus import (
 )
 from redbot.core.utils.predicates import MessagePredicate, ReactionPredicate
 from . import dataclasses
-from .apis import MusicCache
+from .apis import MusicCache, HAS_SQL
+from .checks import can_have_caching
 from .converters import ComplexScopeParser, ScopeParser, get_lazy_converter, get_playlist_converter
 from .equalizer import Equalizer
 from .errors import LavalinkDownloadFailed, MissingGuild, SpotifyFetchError, TooManyMatches
@@ -51,6 +52,7 @@ from .playlists import (
     humanize_scope,
 )
 from .utils import *
+
 
 _ = Translator("Audio", __file__)
 
@@ -193,6 +195,19 @@ class Audio(commands.Cog):
         self._restart_connect()
         self._disconnect_task = self.bot.loop.create_task(self.disconnect_timer())
         lavalink.register_event_listener(self.event_handler)
+        if not HAS_SQL:
+            error_message = (
+                "Audio version: {version}\nThis version requires SQL to "
+                "access the caching features, "
+                "your Python install is missing the module sqlite3.\n\n"
+                "For instructions on how to fix it Google "
+                "`ModuleNotFoundError: No module named '_sqlite3'`\n"
+                "You will need to reinstall "
+                "Python with SQL dependencies installed.\n\n"
+            ).format(version=__version__)
+            with contextlib.suppress(discord.HTTPException):
+                await self.bot.send_to_owners(error_message)
+            log.critical(error_message)
 
     async def _migrate_config(self, from_version: int, to_version: int):
         database_entries = []
@@ -209,7 +224,7 @@ class Audio(commands.Cog):
                     for count, (name, data) in enumerate(temp_guild_playlist.items(), 1):
                         if not data or not name:
                             continue
-                        playlist = {"id": count, "name": name}
+                        playlist = {"id": count, "name": name, "guild": int(guild_id)}
                         playlist.update(data)
                         guild_playlist[str(count)] = playlist
 
@@ -237,7 +252,7 @@ class Audio(commands.Cog):
                 await self.config.guild(
                     cast(discord.Guild, discord.Object(id=guild_id))
                 ).clear_raw("playlists")
-        if database_entries:
+        if database_entries and HAS_SQL:
             asyncio.ensure_future(self.music_cache.insert("lavalink", database_entries))
 
     def _restart_connect(self):
@@ -759,7 +774,6 @@ class Audio(commands.Cog):
 
     @_perms_whitelist.command(name="list")
     async def _perms_whitelist_list(self, ctx: commands.Context):
-        """List all keywords added to the whitelist."""
         """List all keywords added to the whitelist."""
         whitelist = await self.config.guild(ctx.guild).url_keyword_whitelist()
         if not whitelist:
@@ -1401,6 +1415,7 @@ class Audio(commands.Cog):
 
     @audioset.command(name="cache", usage="level=[5, 3, 2, 1, 0, -1, -2, -3]")
     @checks.is_owner()
+    @can_have_caching()
     async def _storage(self, ctx: commands.Context, *, level: int = None):
         """Sets the caching level.
 
@@ -1496,6 +1511,7 @@ class Audio(commands.Cog):
 
     @audioset.command(name="cacheage")
     @checks.is_owner()
+    @can_have_caching()
     async def _cacheage(self, ctx: commands.Context, age: int):
         """Sets the cache max age.
 
@@ -2641,7 +2657,6 @@ class Audio(commands.Cog):
                 search_track_num = search_track_num % 5
             if search_track_num == 0:
                 search_track_num = 5
-                # query = Query.process_input(track)
             if playlist:
                 name = "**[{}]({})** - {}".format(
                     entry.get("name"),
@@ -3068,7 +3083,25 @@ class Audio(commands.Cog):
                     has_perms = True
 
         if has_perms is False:
-            if playlist.scope == PlaylistScope.GUILD.value and (is_different_guild or dj_enabled):
+            if hasattr(playlist, "name"):
+                msg = _(
+                    "You do not have the permissions to manage {name} " "(`{id}`) [**{scope}**]."
+                ).format(
+                    user=playlist_author,
+                    name=playlist.name,
+                    id=playlist.id,
+                    scope=humanize_scope(
+                        playlist.scope,
+                        ctx=guild_to_query
+                        if playlist.scope == PlaylistScope.GUILD.value
+                        else playlist_author
+                        if playlist.scope == PlaylistScope.USER.value
+                        else None,
+                    ),
+                )
+            elif playlist.scope == PlaylistScope.GUILD.value and (
+                is_different_guild or dj_enabled
+            ):
                 msg = _(
                     "You do not have the permissions to manage that playlist in {guild}."
                 ).format(guild=guild_to_query)
@@ -3076,7 +3109,6 @@ class Audio(commands.Cog):
                 playlist.scope in [PlaylistScope.GUILD.value, PlaylistScope.USER.value]
                 and is_different_user
             ):
-
                 msg = _(
                     "You do not have the permissions to manage playlist owned by {user}."
                 ).format(user=playlist_author)
@@ -3172,8 +3204,8 @@ class Audio(commands.Cog):
                 ]
             if match_count > 10:
                 raise TooManyMatches(
-                    f"{match_count} playlist match {original_input} "
-                    f"Please try to be more specific or use the playlist ID."
+                    f"{match_count} playlists match {original_input}: "
+                    f"Please try to be more specific, or use the playlist ID."
                 )
         elif match_count == 1:
             return correct_scope_matches[0][0], original_input
@@ -3463,7 +3495,7 @@ class Audio(commands.Cog):
                 ctx, _("Could not match '{arg}' to a playlist.").format(arg=playlist_arg)
             )
 
-        temp_playlist = FakePlaylist(to_author.id)
+        temp_playlist = FakePlaylist(to_author.id, to_scope)
         if not await self.can_manage_playlist(to_scope, temp_playlist, ctx, to_author, to_guild):
             return
 
@@ -3557,7 +3589,7 @@ class Audio(commands.Cog):
             scope_data = [PlaylistScope.GUILD.value, ctx.author, ctx.guild, False]
         scope, author, guild, specified_user = scope_data
 
-        temp_playlist = FakePlaylist(author.id)
+        temp_playlist = FakePlaylist(author.id, scope)
         scope_name = humanize_scope(
             scope, ctx=guild if scope == PlaylistScope.GUILD.value else author
         )
@@ -4172,7 +4204,7 @@ class Audio(commands.Cog):
         scope_name = humanize_scope(
             scope, ctx=guild if scope == PlaylistScope.GUILD.value else author
         )
-        temp_playlist = FakePlaylist(author.id)
+        temp_playlist = FakePlaylist(author.id, scope)
         if not await self.can_manage_playlist(scope, temp_playlist, ctx, author, guild):
             return
         playlist_name = playlist_name.split(" ")[0].strip('"')[:32]
@@ -4365,7 +4397,7 @@ class Audio(commands.Cog):
             scope, ctx=guild if scope == PlaylistScope.GUILD.value else author
         )
 
-        temp_playlist = FakePlaylist(author.id)
+        temp_playlist = FakePlaylist(author.id, scope)
         if not await self.can_manage_playlist(scope, temp_playlist, ctx, author, guild):
             return
         playlist_name = playlist_name.split(" ")[0].strip('"')[:32]
@@ -4596,6 +4628,8 @@ class Audio(commands.Cog):
             return
         try:
             playlist = await get_playlist(playlist_id, scope, self.bot, guild, author)
+            if not await self.can_manage_playlist(scope, playlist, ctx, author, guild):
+                return
             if playlist.url:
                 player = lavalink.get_player(ctx.guild.id)
                 added, removed, playlist = await self._maybe_update_playlist(ctx, player, playlist)
@@ -4711,7 +4745,7 @@ class Audio(commands.Cog):
         if scope_data is None:
             scope_data = [PlaylistScope.GUILD.value, ctx.author, ctx.guild, False]
         scope, author, guild, specified_user = scope_data
-        temp_playlist = FakePlaylist(author.id)
+        temp_playlist = FakePlaylist(author.id, scope)
         if not await self.can_manage_playlist(scope, temp_playlist, ctx, author, guild):
             return
 
@@ -4827,9 +4861,9 @@ class Audio(commands.Cog):
         ​ ​ ​ ​ Exact guild name
 
         Example use:
-        ​ ​ ​ ​ [p]playlist update MyGuildPlaylist RenamedGuildPlaylist
-        ​ ​ ​ ​ [p]playlist update MyGlobalPlaylist RenamedGlobalPlaylist --scope Global
-        ​ ​ ​ ​ [p]playlist update MyPersonalPlaylist RenamedPersonalPlaylist --scope User
+        ​ ​ ​ ​ [p]playlist rename MyGuildPlaylist RenamedGuildPlaylist
+        ​ ​ ​ ​ [p]playlist rename MyGlobalPlaylist RenamedGlobalPlaylist --scope Global
+        ​ ​ ​ ​ [p]playlist rename MyPersonalPlaylist RenamedPersonalPlaylist --scope User
         """
         if scope_data is None:
             scope_data = [PlaylistScope.GUILD.value, ctx.author, ctx.guild, False]
@@ -4945,7 +4979,7 @@ class Audio(commands.Cog):
                         "last_fetched": time_now,
                     }
                 )
-        if database_entries:
+        if database_entries and HAS_SQL:
             asyncio.ensure_future(self.music_cache.insert("lavalink", database_entries))
 
     async def _load_v2_playlist(
