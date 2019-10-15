@@ -95,6 +95,11 @@ async def queue_duration(ctx):
 
 
 async def draw_time(ctx):
+    saber1 = str(discord.utils.get(_bot.emojis, id=632678611148865548))
+    saber2 = str(discord.utils.get(_bot.emojis, id=632678634280452106))
+    saber3 = str(discord.utils.get(_bot.emojis, id=632678653116940298))
+    bb8 = discord.utils.get(_bot.emojis, id=605196852647952394)
+    tiefighter = discord.utils.get(_bot.emojis, id=632674535774355486)
     player = lavalink.get_player(ctx.guild.id)
     paused = player.paused
     pos = player.position
@@ -103,15 +108,20 @@ async def draw_time(ctx):
     loc_time = round((pos / dur) * sections)
     bar = "\N{BOX DRAWINGS HEAVY HORIZONTAL}"
     seek = "\N{RADIO BUTTON}"
+    hit_loc = False
     if paused:
-        msg = "\N{DOUBLE VERTICAL BAR}"
+        msg = "{}{}".format(tiefighter, saber1)
     else:
-        msg = "\N{BLACK RIGHT-POINTING TRIANGLE}"
+        msg = "{}".format(saber1)
     for i in range(sections):
         if i == loc_time:
-            msg += seek
+            hit_loc = True
+            msg += saber3
         else:
-            msg += bar
+            if hit_loc:
+                msg += bar
+            else:
+                msg += saber2
     return msg
 
 
