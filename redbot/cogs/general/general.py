@@ -38,26 +38,28 @@ class General(commands.Cog):
     global _
     _ = lambda s: s
     ball = [
-        _("As I see it, yes"),
-        _("It is certain"),
-        _("It is decidedly so"),
-        _("Most likely"),
-        _("Outlook good"),
-        _("Signs point to yes"),
-        _("Without a doubt"),
-        _("Yes"),
-        _("Yes – definitely"),
-        _("You may rely on it"),
-        _("Reply hazy, try again"),
-        _("Ask again later"),
-        _("Better not tell you now"),
-        _("Cannot predict now"),
-        _("Concentrate and ask again"),
-        _("Don't count on it"),
-        _("My reply is no"),
-        _("My sources say no"),
-        _("Outlook not so good"),
-        _("Very doubtful"),
+        _("The answer you seek is yes."),
+        _("Difficult question you ask. Yes, I answer."),
+        _("Use the Force. Teach you it will."),
+        _("Search your feelings. Answer this question it will."),
+        _("Yes, I sense this is."),
+        _("Yes, I feel this will be."),
+        _("Many questions you ask."),
+        _("Use the Force. Answers you seek can be found in the Force."),
+        _("This even Yoda does not know."),
+        _("You will know when you are calm and at peace."),
+        _("Clear your mind must be."),
+        _("Control, control, you must learn control."),
+        _("Train yourself to let go of everything you fear to lose."),
+        _("Feel the force!"),
+        _("Use your feelings."),
+        _("No, I sense this is. "),
+        _("Simple question you ask. No, I answer. "),
+        _("Difficult question you ask. No, I answer. "),
+        _("Mind what you've learned."),
+        _("The dark side clouds everything."),
+        _("Already know that whice you need."),
+        _("Strong enough you are not."),
     ]
     _ = T_
 
@@ -165,9 +167,9 @@ class General(commands.Cog):
                 )
             )
 
-    @commands.command(name="8", aliases=["8ball"])
-    async def _8ball(self, ctx, *, question: str):
-        """Ask 8 ball a question.
+    @commands.command()
+    async def yoda(self, ctx, *, question: str):
+        """Ask Yoda a question.
 
         Question must end with a question mark.
         """
@@ -257,89 +259,3 @@ class General(commands.Cog):
         except discord.Forbidden:
             await ctx.send(_("I need the `Embed links` permission to send this."))
 
-    @commands.command()
-    async def urban(self, ctx, *, word):
-        """Search the Urban Dictionary.
-
-        This uses the unofficial Urban Dictionary API.
-        """
-        
-        try:
-            url = "https://api.urbandictionary.com/v0/define?term=" + str(word).lower()
-
-            headers = {"content-type": "application/json"}
-
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers) as response:
-                    data = await response.json()
-
-        except aiohttp.ClientError:
-            await ctx.send(
-                _("No Urban Dictionary entries were found, or there was an error in the process.")
-            )
-            return
-
-        if data.get("error") != 404:
-            if not data.get("list"):
-                return await ctx.send(_("No Urban Dictionary entries were found."))
-            if await ctx.embed_requested():
-                # a list of embeds
-                embeds = []
-                for ud in data["list"]:
-                    embed = discord.Embed()
-                    embed.title = _("{word} by {author}").format(
-                        word=ud["word"].capitalize(), author=ud["author"]
-                    )
-                    embed.url = ud["permalink"]
-
-                    description = _("{definition}\n\n**Example:** {example}").format(**ud)
-                    if len(description) > 2048:
-                        description = "{}...".format(description[:2045])
-                    embed.description = description
-
-                    embed.set_footer(
-                        text=_(
-                            "{thumbs_down} Down / {thumbs_up} Up, Powered by Urban Dictionary."
-                        ).format(**ud)
-                    )
-                    embeds.append(embed)
-
-                if embeds is not None and len(embeds) > 0:
-                    await menu(
-                        ctx,
-                        pages=embeds,
-                        controls=DEFAULT_CONTROLS,
-                        message=None,
-                        page=0,
-                        timeout=30,
-                    )
-            else:
-                messages = []
-                for ud in data["list"]:
-                    ud.setdefault("example", "N/A")
-                    message = _(
-                        "<{permalink}>\n {word} by {author}\n\n{description}\n\n"
-                        "{thumbs_down} Down / {thumbs_up} Up, Powered by Urban Dictionary."
-                    ).format(word=ud.pop("word").capitalize(), description="{description}", **ud)
-                    max_desc_len = 2000 - len(message)
-
-                    description = _("{definition}\n\n**Example:** {example}").format(**ud)
-                    if len(description) > max_desc_len:
-                        description = "{}...".format(description[: max_desc_len - 3])
-
-                    message = message.format(description=description)
-                    messages.append(message)
-
-                if messages is not None and len(messages) > 0:
-                    await menu(
-                        ctx,
-                        pages=messages,
-                        controls=DEFAULT_CONTROLS,
-                        message=None,
-                        page=0,
-                        timeout=30,
-                    )
-        else:
-            await ctx.send(
-                _("No Urban Dictionary entries were found, or there was an error in the process.")
-            )
