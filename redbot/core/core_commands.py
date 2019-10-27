@@ -10,6 +10,8 @@ import platform
 import getpass
 import pip
 import traceback
+import random
+from random import choice, sample
 from collections import namedtuple
 from pathlib import Path
 from random import SystemRandom
@@ -359,6 +361,24 @@ class Core(commands.Cog, CoreLogic):
         except discord.HTTPException:
             await ctx.send(_("I need the `Embed links` permission to send this"))
 
+    def star_wars_phrases(self):
+        phrases = choice(
+            [
+                "Flying with Poe for: ",
+                "Service the resistance for: ",
+                "Fixing X-Wings for: ",
+                "Fighting the Empire for: ",
+                "Hanging out with R2D2 and C3PO for: ",
+                "Flying through the Stars at light speed for: ",
+                "Tumbling around the Millennium Falcon for: ",
+                "Fighting with Chewie for: ",
+                "Destroying Imperial ships for: ",
+                "Giving flame thumbs up for: ",
+                "Circuits have bee online for:",
+            ]
+        )
+        return phrases
+    
     @commands.command()
     async def uptime(self, ctx: commands.Context):
         """Shows Red's uptime"""
@@ -366,8 +386,8 @@ class Core(commands.Cog, CoreLogic):
         delta = datetime.datetime.utcnow() - self.bot.uptime
         uptime_str = humanize_timedelta(timedelta=delta) or _("Less than one second")
         await ctx.send(
-            _("Been up for: **{time_quantity}** (since {timestamp} UTC)").format(
-                time_quantity=uptime_str, timestamp=since
+            _("{} **{time_quantity}** (since {timestamp} UTC)").format(
+                self.star_wars_phrases(), time_quantity=uptime_str, timestamp=since
             )
         )
 
