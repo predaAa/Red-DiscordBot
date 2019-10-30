@@ -279,6 +279,15 @@ def init_events(bot, cli_flags):
             group_data = c.custom_groups
             await bot._config.custom("CUSTOM_GROUPS", c.cog_name, uuid).set(group_data)
 
+    @bot.event
+    async def on_command(ctx: commands.Context):
+        cmd = ctx.command.qualified_name.replace(" ", "_")
+        bot.command_stats[cmd] += 1
+
+    @bot.event
+    async def on_socket_response(msg):
+        bot.socket_stats[msg.get('t')] += 1
+
 
 def _get_startup_screen_specs():
     """Get specs for displaying the startup screen on stdout.

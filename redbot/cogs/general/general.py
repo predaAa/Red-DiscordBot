@@ -224,38 +224,3 @@ class General(commands.Cog):
             raise RuntimeError
         await ctx.send(msg)
 
-    @commands.command()
-    @commands.guild_only()
-    async def serverinfo(self, ctx):
-        """Show server information."""
-        guild = ctx.guild
-        online = humanize_number(
-            len([m.status for m in guild.members if m.status != discord.Status.offline])
-        )
-        total_users = humanize_number(len(guild.members))
-        text_channels = humanize_number(len(guild.text_channels))
-        voice_channels = humanize_number(len(guild.voice_channels))
-        passed = (ctx.message.created_at - guild.created_at).days
-        created_at = _("Since {date}. That's over {num} days ago!").format(
-            date=guild.created_at.strftime("%d %b %Y %H:%M"), num=passed
-        )
-        data = discord.Embed(description=created_at, colour=(await ctx.embed_colour()))
-        data.add_field(name=_("Region"), value=str(guild.region))
-        data.add_field(name=_("Users"), value=f"{online}/{total_users}")
-        data.add_field(name=_("Text Channels"), value=text_channels)
-        data.add_field(name=_("Voice Channels"), value=voice_channels)
-        data.add_field(name=_("Roles"), value=humanize_number(len(guild.roles)))
-        data.add_field(name=_("Owner"), value=str(guild.owner))
-        data.set_footer(text=_("Server ID: ") + str(guild.id))
-
-        if guild.icon_url:
-            data.set_author(name=guild.name, url=guild.icon_url)
-            data.set_thumbnail(url=guild.icon_url)
-        else:
-            data.set_author(name=guild.name)
-
-        try:
-            await ctx.send(embed=data)
-        except discord.Forbidden:
-            await ctx.send(_("I need the `Embed links` permission to send this."))
-
