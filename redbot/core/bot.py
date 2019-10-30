@@ -8,6 +8,7 @@ from enum import Enum
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import Optional, Union, List, Dict, NoReturn
+from collections import Counter
 
 import discord
 from discord.ext.commands import when_mentioned_or
@@ -47,6 +48,8 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
         self._last_exception = None
+        self.command_stats = Counter()
+        self.socket_stats = Counter()
         self._config.register_global(
             token=None,
             prefix=[],
