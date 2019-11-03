@@ -2356,6 +2356,58 @@ class Core(commands.Cog, CoreLogic):
         for page in pagify(output):
             await ctx.send(page)
 
+    @commands.command()
+    async def credits(self, ctx):
+        """
+        List credits of the bot
+        """
+        org_repo = "https://github.com/Cog-Creators"
+        red_repo = org_repo + "/Red-DiscordBot"
+        author_repo = "https://github.com/Twentysix26"
+        embed = discord.Embed(
+            title="BB-8 Credits",
+            description="Credits for all of the people who have made various cogs for the bot and have helped to make it what is is today!",
+            color = await ctx.embed_color(),
+        )
+        embed.add_field(name="Red Discord Bot:", value="BB-8 is a custom fork of [Red, an open source Discord bot]({}) "
+                            "created by [Twentysix]({}) and [improved by many]({}).\n\n"
+                            "To run your own instance of red checkout the docs at https://red-discordbot.readthedocs.io/en/stable/index.html".format(
+                                red_repo, author_repo, org_repo)
+                        )
+        embed.add_field(
+            name="Cog Creators:",
+            value=
+                "**Adrian** https://github.com/designbyadrian/CogsByAdrian\n"
+                "**Aikaterna** https://github.com/aikaterna/aikaterna-cogs\n"
+                "**Aioxas** https://github.com/Aioxas/ax-cogs/tree/V3\n"
+                "**Baiumbg** https://github.com/baiumbg/baiumbg-Cogs\n"
+                "**Colt** https://github.com/coltoutram/Colts-Cogs\n"
+                "**Fixator10** https://github.com/fixator10/Fixator10-Cogs\n"
+                "**Flame** https://github.com/Flame442/FlameCogs\n"
+                "**Flapjack** https://github.com/flapjax/FlapJack-Cogs\n"
+                "**Flare** https://github.com/flaree/Flare-Cogs\n"
+                "**Grande** https://github.com/HarukiGrande/GrandeCogs-V3\n"
+                "**Jintaku** https://github.com/Jintaku/Jintaku-Cogs-V3\n"
+            )
+        embed.add_field(
+            name="Cog Creators Cont.:",
+            value=
+                "**Laggron** https://github.com/retke/Laggrons-Dumb-Cogs\n"
+                "**Neuro Assassin** https://github.com/NeuroAssassin/Toxic-Cogs\n"
+                "**Palm** https://github.com/palmtree5/palmtree5-cogs\n"
+                "**Predä** https://github.com/predaAa/predacogs\n"
+                "**Redjumpman** https://github.com/Redjumpman/Jumper-Plugins\n"
+                "**Saurichable** https://github.com/elijabesu/SauriCogs/\n"
+                "**Sinbad** https://github.com/mikeshardmind/SinbadCogs\n"
+                "**tmerc** https://github.com/tmercswims/tmerc-cogs\n"
+                "**Tobotimus** https://github.com/Tobotimus/Tobo-Cogs\n"
+                "**Trusty** https://github.com/TrustyJAID/Trusty-cogs/\n"
+                "**Wyn** https://github.com/Wyn10/Wyn-RedV3Cogs"
+            )
+        embed.add_field(name="Contributors", value="Predä - 尝试赢。#1001\nFlame#2941\nNeuro Assassin#4779\naikaterna#1393\nDraper#6666")
+        embed.set_thumbnail(url=ctx.bot.user.avatar_url_as(static_format="png"))
+        await ctx.send(embed=embed)
+
     # RPC handlers
     async def rpc_load(self, request):
         cog_name = request.params[0]
