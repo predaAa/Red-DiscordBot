@@ -3,6 +3,7 @@ import logging
 import random
 import re
 import aiohttp
+from datetime import datetime
 from collections import defaultdict, deque, namedtuple
 from enum import Enum
 from typing import cast, Iterable, Union
@@ -120,7 +121,6 @@ class Economy(commands.Cog):
     
     default_guild_settings = {
         "PAYDAY_TIME": 300,
-        "DAILY_TIME": 43200,
         "PAYDAY_CREDITS": 120,
         "SLOT_MIN": 5,
         "SLOT_MAX": 100,
@@ -568,8 +568,8 @@ class Economy(commands.Cog):
                     await ctx.send(embed=embed)
                     return
 
-                next_daily = cur_time + await self.config.guild(guild).DAILY_TIME()
-                await self.config.user(author).next_daily.set(next_daily)
+                next_daily = datetime.strptime(data["data"]["expiry"], "%Y-%m-%dT%H:%M:%S.%f")
+                await self.config.user(author).next_daily.set(int(next_daily.timestamp()))
                 pos = await bank.get_leaderboard_position(author)
                 if data["data"]["weekend"]:  # When a value is True, you can just use if with the value you want to check.
                     embed = discord.Embed(
