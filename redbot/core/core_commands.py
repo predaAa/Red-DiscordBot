@@ -2236,6 +2236,8 @@ class Core(commands.Cog, CoreLogic):
         embed.add_field(
             name="Cog Creators:",
             value=
+                "Here's the list of cog creators that have helped to make BB-8 as great as it is,"
+                "with some cogs being modified to fit BB-8 better\n\n"
                 "**Adrian** https://github.com/designbyadrian/CogsByAdrian\n"
                 "**Aikaterna** https://github.com/aikaterna/aikaterna-cogs\n"
                 "**Aioxas** https://github.com/Aioxas/ax-cogs/tree/V3\n"
