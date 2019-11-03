@@ -526,7 +526,6 @@ class Economy(commands.Cog):
         async with ctx.typing():
             async with self.session.get(base_url, headers=headers) as r:
                 data = await r.json()  # You might want to check if the API is up also.
-            print(data)
             if data["voted"] is False:
                 embed = discord.Embed(
                     title="Vote for BB-8 every 12 hours to gain 1000 {currency}".format(
