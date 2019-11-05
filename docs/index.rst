@@ -17,6 +17,7 @@ Welcome to Red - Discord Bot's documentation!
     venv_guide
     cog_dataconverter
     autostart_systemd
+    autostart_pm2
 
 .. toctree::
     :maxdepth: 2
