@@ -9,7 +9,7 @@ import random
 import time
 import traceback
 from collections import namedtuple
-from typing import Callable, Dict, List, Mapping, NoReturn, Optional, Tuple, Union
+from typing import Callable, Dict, List, Mapping, Optional, Tuple, Union
 
 try:
     from sqlite3 import Error as SQLError
@@ -193,7 +193,7 @@ class SpotifyAPI:
                 )
             return await r.json()
 
-    async def _get_auth(self) -> NoReturn:
+    async def _get_auth(self):
         if self.client_id is None or self.client_secret is None:
             tokens = await self.bot.get_shared_api_tokens("spotify")
             self.client_id = tokens.get("client_id", "")
@@ -331,7 +331,7 @@ class MusicCache:
         self._lock: asyncio.Lock = asyncio.Lock()
         self.config: Optional[Config] = None
 
-    async def initialize(self, config: Config) -> NoReturn:
+    async def initialize(self, config: Config):
         if HAS_SQL:
             await self.database.connect()
 
@@ -348,12 +348,12 @@ class MusicCache:
             await self.database.execute(query=_CREATE_UNIQUE_INDEX_SPOTIFY_TABLE)
         self.config = config
 
-    async def close(self) -> NoReturn:
+    async def close(self):
         if HAS_SQL:
             await self.database.execute(query="PRAGMA optimize;")
             await self.database.disconnect()
 
-    async def insert(self, table: str, values: List[dict]) -> NoReturn:
+    async def insert(self, table: str, values: List[dict]):
         # if table == "spotify":
         #     return
         if HAS_SQL:
@@ -363,7 +363,7 @@ class MusicCache:
 
             await self.database.execute_many(query=query, values=values)
 
-    async def update(self, table: str, values: Dict[str, str]) -> NoReturn:
+    async def update(self, table: str, values: Dict[str, str]):
         # if table == "spotify":
         #     return
         if HAS_SQL:
@@ -1003,14 +1003,10 @@ class MusicCache:
                     tasks = self._tasks[ctx.message.id]
                     del self._tasks[ctx.message.id]
                     await asyncio.gather(
-                        *[asyncio.ensure_future(self.insert(*a)) for a in tasks["insert"]],
-                        loop=self.bot.loop,
-                        return_exceptions=True,
+                        *[self.insert(*a) for a in tasks["insert"]], return_exceptions=True
                     )
                     await asyncio.gather(
-                        *[asyncio.ensure_future(self.update(*a)) for a in tasks["update"]],
-                        loop=self.bot.loop,
-                        return_exceptions=True,
+                        *[self.update(*a) for a in tasks["update"]], return_exceptions=True
                     )
                 log.debug(f"Completed database writes for {lock_id} " f"({lock_author})")
 
@@ -1025,14 +1021,10 @@ class MusicCache:
                 self._tasks = {}
 
                 await asyncio.gather(
-                    *[asyncio.ensure_future(self.insert(*a)) for a in tasks["insert"]],
-                    loop=self.bot.loop,
-                    return_exceptions=True,
+                    *[self.insert(*a) for a in tasks["insert"]], return_exceptions=True
                 )
                 await asyncio.gather(
-                    *[asyncio.ensure_future(self.update(*a)) for a in tasks["update"]],
-                    loop=self.bot.loop,
-                    return_exceptions=True,
+                    *[self.update(*a) for a in tasks["update"]], return_exceptions=True
                 )
             log.debug("Completed pending writes to database have finished")
 

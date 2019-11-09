@@ -176,6 +176,10 @@ class Audio(commands.Cog):
         # so that we have a better way to handle the tasks
         if self.llsetup in [ctx.command, ctx.command.root_parent]:
             pass
+<<<<<<< HEAD
+=======
+
+>>>>>>> develop
         elif self._connect_task and self._connect_task.cancelled():
             await ctx.send(
                 "You have attempted to run Audio's Lavalink server on an unsupported"
@@ -184,7 +188,11 @@ class Audio(commands.Cog):
             raise RuntimeError(
                 "Not running audio command due to invalid machine architecture for Lavalink."
             )
+<<<<<<< HEAD
         
+=======
+
+>>>>>>> develop
         dj_enabled = await self.config.guild(ctx.guild).dj_enabled()
         if dj_enabled:
             dj_role_obj = ctx.guild.get_role(await self.config.guild(ctx.guild).dj_role())
@@ -195,12 +203,21 @@ class Audio(commands.Cog):
 
     async def initialize(self):
         await self.bot.wait_until_ready()
+<<<<<<< HEAD
         await self._migrate_config(
             from_version=await self.config.schema_version(), to_version=_SCHEMA_VERSION
         )
         pass_config_to_dependencies(self.config, self.bot, await self.config.localpath())
         await self.music_cache.initialize(self.config)
 
+=======
+        # Unlike most cases, we want the cache to exit before migration.
+        await self.music_cache.initialize(self.config)
+        await self._migrate_config(
+            from_version=await self.config.schema_version(), to_version=_SCHEMA_VERSION
+        )
+        pass_config_to_dependencies(self.config, self.bot, await self.config.localpath())
+>>>>>>> develop
         self._restart_connect()
         self._disconnect_task = self.bot.loop.create_task(self.disconnect_timer())
         lavalink.register_event_listener(self.event_handler)
@@ -265,7 +282,7 @@ class Audio(commands.Cog):
                     cast(discord.Guild, discord.Object(id=guild_id))
                 ).clear_raw("playlists")
         if database_entries and HAS_SQL:
-            asyncio.ensure_future(self.music_cache.insert("lavalink", database_entries))
+            await self.music_cache.insert("lavalink", database_entries)
 
     def _restart_connect(self):
         if self._connect_task:
@@ -4990,7 +5007,7 @@ class Audio(commands.Cog):
                     }
                 )
         if database_entries and HAS_SQL:
-            asyncio.ensure_future(self.music_cache.insert("lavalink", database_entries))
+            await self.music_cache.insert("lavalink", database_entries)
 
     async def _load_v2_playlist(
         self,
@@ -6914,6 +6931,7 @@ class Audio(commands.Cog):
     async def on_voice_state_update(
         self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState
     ):
+        await self._ready_event.wait()
         if after.channel != before.channel:
             try:
                 self.skip_votes[before.channel.guild].remove(member.id)
