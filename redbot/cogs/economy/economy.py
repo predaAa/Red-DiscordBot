@@ -262,6 +262,7 @@ class Economy(commands.Cog):
                 )
             )
     @_bank.command()
+    @checks.is_owner()
     async def tagline(self, ctx, embedtagline):
         """
         Set tagline to be used with payday commands in the embed
