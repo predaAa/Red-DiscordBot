@@ -325,10 +325,6 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
         return self._color
 
     get_embed_colour = get_embed_color
-<<<<<<< HEAD
-=======
-
->>>>>>> develop
     # start config migrations
     async def _maybe_update_config(self):
         """
@@ -431,10 +427,6 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
         await self.pre_flight(cli_flags=cli_flags)
         return await super().start(*args, **kwargs)
 
-<<<<<<< HEAD
-
-=======
->>>>>>> develop
     async def send_help_for(
         self, ctx: commands.Context, help_for: Union[commands.Command, commands.GroupMixin, str]
     ):
