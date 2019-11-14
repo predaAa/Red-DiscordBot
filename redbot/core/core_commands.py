@@ -2376,7 +2376,7 @@ class Core(commands.Cog, CoreLogic):
                         )
         embed.add_field(
             name="Cog Creators:",
-            value=
+            value=(
                 "Here's the list of cog creators that have helped to make BB-8 as great as it is,"
                 "with some cogs being modified to fit BB-8 better\n\n"
                 "**Adrian** https://github.com/designbyadrian/CogsByAdrian\n"
@@ -2389,11 +2389,12 @@ class Core(commands.Cog, CoreLogic):
                 "**Flapjack** https://github.com/flapjax/FlapJack-Cogs\n"
                 "**Flare** https://github.com/flaree/Flare-Cogs\n"
                 "**Grande** https://github.com/HarukiGrande/GrandeCogs-V3\n"
-                "**Jintaku** https://github.com/Jintaku/Jintaku-Cogs-V3\n"
+                "**Jintaku** https://github.com/Jintaku/Jintaku-Cogs-V3\n"),
+            inline=False
             )
         embed.add_field(
             name="Cog Creators Cont.:",
-            value=
+            value=(
                 "**Laggron** https://github.com/retke/Laggrons-Dumb-Cogs\n"
                 "**Neuro Assassin** https://github.com/NeuroAssassin/Toxic-Cogs\n"
                 "**Palm** https://github.com/palmtree5/palmtree5-cogs\n"
@@ -2404,7 +2405,8 @@ class Core(commands.Cog, CoreLogic):
                 "**tmerc** https://github.com/tmercswims/tmerc-cogs\n"
                 "**Tobotimus** https://github.com/Tobotimus/Tobo-Cogs\n"
                 "**Trusty** https://github.com/TrustyJAID/Trusty-cogs/\n"
-                "**Wyn** https://github.com/Wyn10/Wyn-RedV3Cogs"
+                "**Wyn** https://github.com/Wyn10/Wyn-RedV3Cogs"),
+            inline=False
             )
         embed.add_field(name="Contributors", value="Predä - 尝试赢。#1001\nFlame#2941\nNeuro Assassin#4779\naikaterna#1393\nDraper#6666")
         embed.set_thumbnail(url=ctx.bot.user.avatar_url_as(static_format="png"))
