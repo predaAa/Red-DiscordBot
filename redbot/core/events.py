@@ -41,8 +41,8 @@ def init_events(bot, cli_flags):
     async def on_connect():
         if bot._uptime is None:
             print("Connected to Discord. Getting ready...")
-        game = discord.Game("Loading...")
-        await bot.change_presence(status=discord.Status.idle, activity=game)
+        game = discord.Game("Powering up...")
+        await bot.change_presence(status=discord.Status.dnd, activity=game)
 
     @bot.event
     async def on_ready():
