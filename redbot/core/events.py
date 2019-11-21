@@ -5,6 +5,8 @@ import datetime
 import logging
 import traceback
 import asyncio
+import time
+import discord
 from datetime import timedelta
 
 import aiohttp
@@ -39,6 +41,8 @@ def init_events(bot, cli_flags):
     async def on_connect():
         if bot._uptime is None:
             print("Connected to Discord. Getting ready...")
+        game = discord.Game("Loading...")
+        await bot.change_presence(status=discord.Status.idle, activity=game)
 
     @bot.event
     async def on_ready():
@@ -125,6 +129,16 @@ def init_events(bot, cli_flags):
             print("\nInvite URL: {}\n".format(invite_url))
 
         bot._color = discord.Colour(await bot._config.color())
+        bot.launch_time = abs(bot.launch_time - int(time.perf_counter()))
+        humanized_launch_time = humanize_timedelta(seconds=bot.launch_time) or "1 second"
+        chan = bot.get_guild(489162733791739950).get_channel(646857954175221810)
+        embed = discord.Embed(
+            description=("\N{WHITE HEAVY CHECK MARK} **BB-8 is Up and ready for use!**\n\nLaunch Time: **{}**").format(humanized_launch_time),
+            color = 0x00FF00
+        )
+        await chan.send(embed=embed)
+        await bot.change_presence(status=discord.Status.online, activity=None)
+
 
     @bot.event
     async def on_command_error(ctx, error, unhandled_by_cog=False):

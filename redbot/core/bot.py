@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import logging
 import os
+import time
 from collections import namedtuple
 from datetime import datetime
 from enum import Enum
@@ -42,6 +43,7 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
     """
 
     def __init__(self, *args, cli_flags=None, bot_dir: Path = Path.cwd(), **kwargs):
+        self.launch_time = int(time.perf_counter())
         self._shutdown_mode = ExitCodes.CRITICAL
         self._config = Config.get_core_conf(force_registration=False)
         self._co_owners = cli_flags.co_owner
