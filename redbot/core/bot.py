@@ -10,6 +10,7 @@ from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import Optional, Union, List, Dict, NoReturn
 from collections import Counter
+from types import MappingProxyType
 
 import discord
 from discord.ext.commands import when_mentioned_or
@@ -585,6 +586,7 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
 
         async with self._config.custom(SHARED_API_TOKENS, service_name).all() as group:
             group.update(tokens)
+        self.dispatch("red_api_tokens_update", service_name, MappingProxyType(group))
 
     async def remove_shared_api_tokens(self, service_name: str, *token_names: str):
         """
