@@ -817,3 +817,6 @@ class Economy(commands.Cog):
                     name = name.rstrip("s")
                 result.append("{} {}".format(value, name))
         return ", ".join(result[:granularity])
+
+    def cog_unload(self):
+        self.bot.loop.create_task(self.session.close())
