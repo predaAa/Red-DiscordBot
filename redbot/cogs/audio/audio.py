@@ -26,7 +26,7 @@ from redbot.core.data_manager import cog_data_path
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import bold, box, humanize_number, inline, pagify
 from redbot.core.utils.menus import (
-    DEFAULT_CONTROLS,
+    CUSTOM_DEFAULT_CONTROLS,
     close_menu,
     menu,
     next_page,
@@ -800,7 +800,7 @@ class Audio(commands.Cog):
             discord.Embed(title="Whitelist", description=page, colour=embed_colour)
             for page in pages
         )
-        await menu(ctx, pages, DEFAULT_CONTROLS)
+        await menu(ctx, pages, CUSTOM_DEFAULT_CONTROLS(ctx))
 
     @_perms_blacklist.command(name="list")
     async def _perms_blacklist_list(self, ctx: commands.Context):
@@ -826,7 +826,7 @@ class Audio(commands.Cog):
             discord.Embed(title="Whitelist", description=page, colour=embed_colour)
             for page in pages
         )
-        await menu(ctx, pages, DEFAULT_CONTROLS)
+        await menu(ctx, pages, CUSTOM_DEFAULT_CONTROLS(ctx))
 
     @_perms_whitelist.command(name="clear")
     async def _perms_whitelist_clear(self, ctx: commands.Context):
@@ -1590,7 +1590,7 @@ class Audio(commands.Cog):
             pages += 1
             servers_embed.append(em)
 
-        await menu(ctx, servers_embed, DEFAULT_CONTROLS)
+        await menu(ctx, servers_embed, CUSTOM_DEFAULT_CONTROLS(ctx))
 
     @commands.command()
     @commands.guild_only()
@@ -1771,7 +1771,7 @@ class Audio(commands.Cog):
             page_list.append(embed)
         if len(page_list) == 1:
             return await ctx.send(embed=page_list[0])
-        await menu(ctx, page_list, DEFAULT_CONTROLS)
+        await menu(ctx, page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
 
     @eq.command(name="load")
     async def _eq_load(self, ctx: commands.Context, eq_preset: str):
@@ -2067,7 +2067,7 @@ class Audio(commands.Cog):
 
         dj_enabled = await self.config.guild(ctx.guild).dj_enabled()
         if dj_enabled and not await self._can_instaskip(ctx, ctx.author):
-            return await menu(ctx, folder_page_list, DEFAULT_CONTROLS)
+            return await menu(ctx, folder_page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
         else:
             await menu(ctx, folder_page_list, local_folder_controls)
 
@@ -4064,7 +4064,7 @@ class Audio(commands.Cog):
                 )
             )
             page_list.append(embed)
-        await menu(ctx, page_list, DEFAULT_CONTROLS)
+        await menu(ctx, page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
 
     @playlist.command(name="list", usage="[args]")
     @commands.bot_has_permissions(add_reactions=True)
@@ -4149,7 +4149,7 @@ class Audio(commands.Cog):
         for page_num in range(1, len_playlist_list_pages + 1):
             embed = await self._build_playlist_list_page(ctx, page_num, abc_names, name)
             playlist_embeds.append(embed)
-        await menu(ctx, playlist_embeds, DEFAULT_CONTROLS)
+        await menu(ctx, playlist_embeds, CUSTOM_DEFAULT_CONTROLS(ctx))
 
     @staticmethod
     async def _build_playlist_list_page(ctx: commands.Context, page_num, abc_names, scope):
@@ -4709,7 +4709,7 @@ class Audio(commands.Cog):
                             embed.set_footer(text=text)
                             embeds.append(embed)
                             added_text = ""
-                await menu(ctx, embeds, DEFAULT_CONTROLS)
+                await menu(ctx, embeds, CUSTOM_DEFAULT_CONTROLS(ctx))
             else:
                 return await self._embed_msg(
                     ctx,
@@ -5594,7 +5594,7 @@ class Audio(commands.Cog):
         for page_num in range(1, len_search_pages + 1):
             embed = await self._build_queue_search_page(ctx, page_num, search_list)
             search_page_list.append(embed)
-        await menu(ctx, search_page_list, DEFAULT_CONTROLS)
+        await menu(ctx, search_page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
 
     @queue.command(name="shuffle")
     @commands.guild_only()
@@ -5889,7 +5889,7 @@ class Audio(commands.Cog):
         dj_enabled = await self.config.guild(ctx.guild).dj_enabled()
         if dj_enabled:
             if not await self._can_instaskip(ctx, ctx.author):
-                return await menu(ctx, search_page_list, DEFAULT_CONTROLS)
+                return await menu(ctx, search_page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
 
         await menu(ctx, search_page_list, search_controls)
 

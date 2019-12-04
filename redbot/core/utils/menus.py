@@ -204,5 +204,24 @@ def start_adding_reactions(
 
     return loop.create_task(task())
 
+def CUSTOM_DEFAULT_CONTROLS(ctx) -> dict:
+    if ctx.me.permissions_in(ctx.channel).external_emojis:
+        cross = discord.utils.get(ctx.bot.emojis, id=632685164408995870)
+    else:
+        cross = "\N{CROSS MARK}"
+    if ctx.me.permissions_in(ctx.channel).external_emojis:
+        right = discord.utils.get(ctx.bot.emojis, id=647178261394358325)
+    else:
+        right = "\N{BLACK RIGHT-POINTING TRIANGLE}\N{VARIATION SELECTOR-16}"
+    if ctx.me.permissions_in(ctx.channel).external_emojis:
+        left = discord.utils.get(ctx.bot.emojis, id=647175085592936458)
+    else:
+        left = "\N{BLACK LEFT-POINTING TRIANGLE}\N{VARIATION SELECTOR-16}"
+    controls = {
+        left: prev_page,
+        cross: close_menu,
+        right: next_page,
+    }
+    return controls
 
 DEFAULT_CONTROLS = {"⬅": prev_page, "❌": close_menu, "➡": next_page}
