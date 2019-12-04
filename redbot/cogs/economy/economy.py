@@ -12,7 +12,7 @@ from redbot.cogs.mod.converters import RawUserIds
 from redbot.core import Config, bank, commands, errors, checks
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import box, humanize_number
-from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
+from redbot.core.utils.menus import menu, CUSTOM_DEFAULT_CONTROLS
 
 from redbot.core.bot import Red
 
@@ -511,7 +511,7 @@ class Economy(commands.Cog):
             highscores.append(box(temp_msg, lang="md"))
 
         if highscores:
-            await menu(ctx, highscores, DEFAULT_CONTROLS)
+            await menu(ctx, highscores, CUSTOM_DEFAULT_CONTROLS(ctx))
 
     @commands.command()
     @guild_only_check()
