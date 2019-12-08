@@ -5,12 +5,11 @@ import datetime
 import heapq
 import json
 import logging
-import os
 import random
 import re
 import time
 import traceback
-from collections import namedtuple
+from collections import namedtuple, Counter
 from io import StringIO
 from typing import List, Optional, Tuple, Union, cast
 
@@ -26,7 +25,7 @@ from redbot.core.data_manager import cog_data_path
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import bold, box, humanize_number, inline, pagify
 from redbot.core.utils.menus import (
-    CUSTOM_DEFAULT_CONTROLS,
+    DEFAULT_CONTROLS,
     close_menu,
     menu,
     next_page,
@@ -98,7 +97,7 @@ class Audio(commands.Cog):
             status=False,
             use_external_lavalink=False,
             restrict=True,
-            current_version=redbot.core.VersionInfo.from_str("3.0.0a0").to_json(),
+            current_version=redbot.core.VersionInfo.from_str(__version__).to_json(),
             localpath=str(cog_data_path(raw_name="Audio")),
             **self._default_lavalink_settings,
         )
@@ -139,6 +138,9 @@ class Audio(commands.Cog):
         self.config.register_guild(**default_guild)
         self.config.register_global(**default_global)
         self.music_cache = MusicCache(bot, self.session, path=str(cog_data_path(raw_name="Audio")))
+        self._error_counter = Counter()
+        self._error_timer = {}
+        self._disconnected_players = {}
         self.play_lock = {}
 
         self._manager: Optional[ServerManager] = None
@@ -176,6 +178,7 @@ class Audio(commands.Cog):
         # so that we have a better way to handle the tasks
         if self.llsetup in [ctx.command, ctx.command.root_parent]:
             pass
+
         elif self._connect_task and self._connect_task.cancelled():
             await ctx.send(
                 "You have attempted to run Audio's Lavalink server on an unsupported"
@@ -184,6 +187,7 @@ class Audio(commands.Cog):
             raise RuntimeError(
                 "Not running audio command due to invalid machine architecture for Lavalink."
             )
+
         dj_enabled = await self.config.guild(ctx.guild).dj_enabled()
         if dj_enabled:
             dj_role_obj = ctx.guild.get_role(await self.config.guild(ctx.guild).dj_role())
@@ -365,6 +369,62 @@ class Audio(commands.Cog):
                 "tracebacks for details."
             )
 
+    async def error_reset(self, player: lavalink.Player):
+        guild = player.channel.guild
+        now = time.time()
+        seconds_allowed = 10
+        last_error = self._error_timer.setdefault(guild.id, now)
+        if now - seconds_allowed > last_error:
+            self._error_timer[guild.id] = 0
+            self._error_counter[guild.id] = 0
+
+    async def increase_error_counter(self, player: lavalink.Player) -> bool:
+        guild = player.channel.guild
+        now = time.time()
+        self._error_counter[guild.id] += 1
+        self._error_timer[guild.id] = now
+        return self._error_counter[guild.id] >= 5
+
+    @staticmethod
+    async def _players_check():
+        try:
+            get_single_title = lavalink.active_players()[0].current.title
+            query = audio_dataclasses.Query.process_input(lavalink.active_players()[0].current.uri)
+            if get_single_title == "Unknown title":
+                get_single_title = lavalink.active_players()[0].current.uri
+                if not get_single_title.startswith("http"):
+                    get_single_title = get_single_title.rsplit("/", 1)[-1]
+            elif query.is_local:
+                get_single_title = "{} - {}".format(
+                    lavalink.active_players()[0].current.author,
+                    lavalink.active_players()[0].current.title,
+                )
+            else:
+                get_single_title = lavalink.active_players()[0].current.title
+            playing_servers = len(lavalink.active_players())
+        except IndexError:
+            get_single_title = None
+            playing_servers = 0
+        return get_single_title, playing_servers
+
+    async def _status_check(self, playing_servers):
+        if playing_servers == 0:
+            await self.bot.change_presence(activity=None)
+        if playing_servers == 1:
+            single_title = await self._players_check()
+            await self.bot.change_presence(
+                activity=discord.Activity(
+                    name=single_title[0], type=discord.ActivityType.listening
+                )
+            )
+        if playing_servers > 1:
+            await self.bot.change_presence(
+                activity=discord.Activity(
+                    name=_("music in {} servers").format(playing_servers),
+                    type=discord.ActivityType.playing,
+                )
+            )
+
     async def event_handler(
         self, player: lavalink.Player, event_type: lavalink.LavalinkEvents, extra
     ):
@@ -374,46 +434,7 @@ class Audio(commands.Cog):
         status = await self.config.status()
         repeat = await self.config.guild(player.channel.guild).repeat()
 
-        async def _players_check():
-            try:
-                get_single_title = lavalink.active_players()[0].current.title
-                query = audio_dataclasses.Query.process_input(
-                    lavalink.active_players()[0].current.uri
-                )
-                if get_single_title == "Unknown title":
-                    get_single_title = lavalink.active_players()[0].current.uri
-                    if not get_single_title.startswith("http"):
-                        get_single_title = get_single_title.rsplit("/", 1)[-1]
-                elif query.is_local:
-                    get_single_title = "{} - {}".format(
-                        lavalink.active_players()[0].current.author,
-                        lavalink.active_players()[0].current.title,
-                    )
-                else:
-                    get_single_title = lavalink.active_players()[0].current.title
-                playing_servers = len(lavalink.active_players())
-            except IndexError:
-                get_single_title = None
-                playing_servers = 0
-            return get_single_title, playing_servers
-
-        async def _status_check(playing_servers):
-            if playing_servers == 0:
-                await self.bot.change_presence(activity=None)
-            if playing_servers == 1:
-                single_title = await _players_check()
-                await self.bot.change_presence(
-                    activity=discord.Activity(
-                        name=single_title[0], type=discord.ActivityType.listening
-                    )
-                )
-            if playing_servers > 1:
-                await self.bot.change_presence(
-                    activity=discord.Activity(
-                        name=_("music in {} servers").format(playing_servers),
-                        type=discord.ActivityType.playing,
-                    )
-                )
+        await self.error_reset(player)
 
         if event_type == lavalink.LavalinkEvents.TRACK_START:
             self.skip_votes[player.channel.guild] = []
@@ -514,16 +535,16 @@ class Audio(commands.Cog):
                 player.store("notify_message", notify_message)
 
         if event_type == lavalink.LavalinkEvents.TRACK_START and status:
-            player_check = await _players_check()
-            await _status_check(player_check[1])
+            player_check = await self._players_check()
+            await self._status_check(player_check[1])
 
         if event_type == lavalink.LavalinkEvents.TRACK_END and status:
             await asyncio.sleep(1)
             if not player.is_playing:
-                player_check = await _players_check()
-                await _status_check(player_check[1])
+                player_check = await self._players_check()
+                await self._status_check(player_check[1])
 
-        if event_type == lavalink.LavalinkEvents.QUEUE_END and notify and not autoplay:
+        if not autoplay and event_type == lavalink.LavalinkEvents.QUEUE_END and notify:
             notify_channel = player.fetch("channel")
             if notify_channel:
                 notify_channel = self.bot.get_channel(notify_channel)
@@ -533,36 +554,16 @@ class Audio(commands.Cog):
                 )
                 await notify_channel.send(embed=embed)
 
-        elif event_type == lavalink.LavalinkEvents.QUEUE_END and disconnect and not autoplay:
-            self.bot.dispatch("red_audio_audio_disconnect", player.channel.guild)
+        elif not autoplay and event_type == lavalink.LavalinkEvents.QUEUE_END and disconnect:
             await player.disconnect()
+            self.bot.dispatch("red_audio_audio_disconnect", player.channel.guild)
 
         if event_type == lavalink.LavalinkEvents.QUEUE_END and status:
-            player_check = await _players_check()
-            await _status_check(player_check[1])
+            player_check = await self._players_check()
+            await self._status_check(player_check[1])
 
         if event_type == lavalink.LavalinkEvents.TRACK_EXCEPTION:
             message_channel = player.fetch("channel")
-            if message_channel:
-                message_channel = self.bot.get_channel(message_channel)
-                query = audio_dataclasses.Query.process_input(player.current.uri)
-                if player.current and query.is_local:
-                    query = audio_dataclasses.Query.process_input(player.current.uri)
-                    if player.current.title == "Unknown title":
-                        description = "{}".format(query.track.to_string_hidden())
-                    else:
-                        song = bold("{} - {}").format(player.current.author, player.current.title)
-                        description = "{}\n{}".format(song, query.track.to_string_hidden())
-                else:
-                    description = bold("[{}]({})").format(player.current.title, player.current.uri)
-
-                embed = discord.Embed(
-                    colour=(await self.bot.get_embed_color(message_channel)),
-                    title=_("Track Error"),
-                    description="{}\n{}".format(extra, description),
-                )
-                embed.set_footer(text=_("Skipping..."))
-                await message_channel.send(embed=embed)
             while True:
                 if player.current in player.queue:
                     player.queue.remove(player.current)
@@ -570,7 +571,61 @@ class Audio(commands.Cog):
                     break
             if repeat:
                 player.current = None
-            await player.skip()
+            self._error_counter.setdefault(player.channel.guild.id, 0)
+            if player.channel.guild.id not in self._error_counter:
+                self._error_counter[player.channel.guild.id] = 0
+            early_exit = await self.increase_error_counter(player)
+            if early_exit:
+                self._disconnected_players[player.channel.guild.id] = True
+                self.play_lock[player.channel.guild.id] = False
+                eq = player.fetch("eq")
+                player.queue = []
+                player.store("playing_song", None)
+                if eq:
+                    await self.config.custom("EQUALIZER", player.channel.guild.id).eq_bands.set(
+                        eq.bands
+                    )
+                await player.stop()
+                await player.disconnect()
+                self.bot.dispatch("red_audio_audio_disconnect", player.channel.guild)
+            if message_channel:
+                message_channel = self.bot.get_channel(message_channel)
+                if early_exit:
+                    embed = discord.Embed(
+                        colour=(await self.bot.get_embed_color(message_channel)),
+                        title=_("Multiple errors detected"),
+                        description=_(
+                            "Closing the audio player "
+                            "due to multiple errors being detected. "
+                            "If this persists, please inform the bot owner "
+                            "as the Audio cog may be temporally unavailable."
+                        ),
+                    )
+                    await message_channel.send(embed=embed)
+                else:
+                    query = audio_dataclasses.Query.process_input(player.current.uri)
+                    if player.current and query.is_local:
+                        query = audio_dataclasses.Query.process_input(player.current.uri)
+                        if player.current.title == "Unknown title":
+                            description = "{}".format(query.track.to_string_hidden())
+                        else:
+                            song = bold("{} - {}").format(
+                                player.current.author, player.current.title
+                            )
+                            description = "{}\n{}".format(song, query.track.to_string_hidden())
+                    else:
+                        description = bold("[{}]({})").format(
+                            player.current.title, player.current.uri
+                        )
+
+                    embed = discord.Embed(
+                        colour=(await self.bot.get_embed_color(message_channel)),
+                        title=_("Track Error"),
+                        description="{}\n{}".format(extra, description),
+                    )
+                    embed.set_footer(text=_("Skipping..."))
+                    await message_channel.send(embed=embed)
+                    await player.skip()
 
     async def play_query(
         self,
@@ -800,7 +855,7 @@ class Audio(commands.Cog):
             discord.Embed(title="Whitelist", description=page, colour=embed_colour)
             for page in pages
         )
-        await menu(ctx, pages, CUSTOM_DEFAULT_CONTROLS(ctx))
+        await menu(ctx, pages, DEFAULT_CONTROLS)
 
     @_perms_blacklist.command(name="list")
     async def _perms_blacklist_list(self, ctx: commands.Context):
@@ -826,7 +881,7 @@ class Audio(commands.Cog):
             discord.Embed(title="Whitelist", description=page, colour=embed_colour)
             for page in pages
         )
-        await menu(ctx, pages, CUSTOM_DEFAULT_CONTROLS(ctx))
+        await menu(ctx, pages, DEFAULT_CONTROLS)
 
     @_perms_whitelist.command(name="clear")
     async def _perms_whitelist_clear(self, ctx: commands.Context):
@@ -982,7 +1037,7 @@ class Audio(commands.Cog):
             try:
                 pred = MessagePredicate.valid_role(ctx)
                 await ctx.bot.wait_for("message", timeout=15.0, check=pred)
-                await ctx.invoke(self.role, pred.result)
+                await ctx.invoke(self.role, role_name=pred.result)
             except asyncio.TimeoutError:
                 return await self._embed_msg(ctx, _("Response timed out, try again later."))
 
@@ -1571,13 +1626,13 @@ class Audio(commands.Cog):
                 )
 
         if total_num == 0:
-            return await self._embed_msg(ctx, _("Not currently broadcasting a rebellion message anywhere."))
+            return await self._embed_msg(ctx, _("Not connected anywhere."))
         servers_embed = []
         pages = 1
         for page in pagify(msg, delims=["\n"], page_length=1500):
             em = discord.Embed(
                 colour=await ctx.embed_colour(),
-                title=_("Currently broadcasting the rebellion message in {num}/{total} servers:").format(
+                title=_("Playing in {num}/{total} servers:").format(
                     num=humanize_number(server_num), total=humanize_number(total_num)
                 ),
                 description=page,
@@ -1590,7 +1645,7 @@ class Audio(commands.Cog):
             pages += 1
             servers_embed.append(em)
 
-        await menu(ctx, servers_embed, CUSTOM_DEFAULT_CONTROLS(ctx))
+        await menu(ctx, servers_embed, DEFAULT_CONTROLS)
 
     @commands.command()
     @commands.guild_only()
@@ -1607,10 +1662,6 @@ class Audio(commands.Cog):
             return await self._embed_msg(
                 ctx, _("You must be in the voice channel to bump a track.")
             )
-        # if player.shuffle:
-        #     return await self._embed_msg(
-        #         ctx, _("Can't bump a track while shuffle is enabled.")
-        #     )
         if dj_enabled:
             if not await self._can_instaskip(ctx, ctx.author):
                 return await self._embed_msg(ctx, _("You need the DJ role to bump tracks."))
@@ -1771,7 +1822,7 @@ class Audio(commands.Cog):
             page_list.append(embed)
         if len(page_list) == 1:
             return await ctx.send(embed=page_list[0])
-        await menu(ctx, page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
+        await menu(ctx, page_list, DEFAULT_CONTROLS)
 
     @eq.command(name="load")
     async def _eq_load(self, ctx: commands.Context, eq_preset: str):
@@ -2067,7 +2118,7 @@ class Audio(commands.Cog):
 
         dj_enabled = await self.config.guild(ctx.guild).dj_enabled()
         if dj_enabled and not await self._can_instaskip(ctx, ctx.author):
-            return await menu(ctx, folder_page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
+            return await menu(ctx, folder_page_list, DEFAULT_CONTROLS)
         else:
             await menu(ctx, folder_page_list, local_folder_controls)
 
@@ -4064,7 +4115,7 @@ class Audio(commands.Cog):
                 )
             )
             page_list.append(embed)
-        await menu(ctx, page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
+        await menu(ctx, page_list, DEFAULT_CONTROLS)
 
     @playlist.command(name="list", usage="[args]")
     @commands.bot_has_permissions(add_reactions=True)
@@ -4149,7 +4200,7 @@ class Audio(commands.Cog):
         for page_num in range(1, len_playlist_list_pages + 1):
             embed = await self._build_playlist_list_page(ctx, page_num, abc_names, name)
             playlist_embeds.append(embed)
-        await menu(ctx, playlist_embeds, CUSTOM_DEFAULT_CONTROLS(ctx))
+        await menu(ctx, playlist_embeds, DEFAULT_CONTROLS)
 
     @staticmethod
     async def _build_playlist_list_page(ctx: commands.Context, page_num, abc_names, scope):
@@ -4709,7 +4760,7 @@ class Audio(commands.Cog):
                             embed.set_footer(text=text)
                             embeds.append(embed)
                             added_text = ""
-                await menu(ctx, embeds, CUSTOM_DEFAULT_CONTROLS(ctx))
+                await menu(ctx, embeds, DEFAULT_CONTROLS)
             else:
                 return await self._embed_msg(
                     ctx,
@@ -5594,7 +5645,7 @@ class Audio(commands.Cog):
         for page_num in range(1, len_search_pages + 1):
             embed = await self._build_queue_search_page(ctx, page_num, search_list)
             search_page_list.append(embed)
-        await menu(ctx, search_page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
+        await menu(ctx, search_page_list, DEFAULT_CONTROLS)
 
     @queue.command(name="shuffle")
     @commands.guild_only()
@@ -5889,7 +5940,7 @@ class Audio(commands.Cog):
         dj_enabled = await self.config.guild(ctx.guild).dj_enabled()
         if dj_enabled:
             if not await self._can_instaskip(ctx, ctx.author):
-                return await menu(ctx, search_page_list, CUSTOM_DEFAULT_CONTROLS(ctx))
+                return await menu(ctx, search_page_list, DEFAULT_CONTROLS)
 
         await menu(ctx, search_page_list, search_controls)
 
@@ -6022,7 +6073,6 @@ class Audio(commands.Cog):
                         search_track_num, track.title, track.uri
                     )
             except AttributeError:
-                # query = Query.process_input(track)
                 track = audio_dataclasses.Query.process_input(track)
                 if track.is_local and command != "search":
                     search_list += "`{}.` **{}**\n".format(
@@ -6975,13 +7025,10 @@ class Audio(commands.Cog):
         ):
             self._play_lock(ctx, False)
             await self.music_cache.run_tasks(ctx)
-            message = "```py" + "\n"
-            message += "Error in command '{}'\nType: {}\nThe Bot owner has received your error.".format(
-                ctx.command.qualified_name, error.original
+            message = "Error in command '{}'. Check your console or logs for details.".format(
+                ctx.command.qualified_name
             )
-            message += "```" + "\n"
-            message += "Use the ``b!support`` command \nThen join the support server and the owner of the bot or a mod will help you when they are available"
-            await ctx.send(message)
+            await ctx.send(inline(message))
             exception_log = "Exception in command '{}'\n" "".format(ctx.command.qualified_name)
             exception_log += "".join(
                 traceback.format_exception(type(error), error, error.__traceback__)
