@@ -129,6 +129,7 @@ def init_events(bot, cli_flags):
             print("\nInvite URL: {}\n".format(invite_url))
 
         bot._color = discord.Colour(await bot._config.color())
+        menus.update_controls(bot)
         bot.launch_time = abs(bot.launch_time - int(time.perf_counter()))
         humanized_launch_time = humanize_timedelta(seconds=bot.launch_time) or "1 second"
         chan = bot.get_guild(489162733791739950).get_channel(646857954175221810)
