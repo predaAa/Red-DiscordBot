@@ -511,7 +511,7 @@ class Economy(commands.Cog):
             highscores.append(box(temp_msg, lang="md"))
 
         if highscores:
-            await menu(ctx, highscores, CUSTOM_DEFAULT_CONTROLS(ctx))
+            await menu(ctx, highscores, DEFAULT_CONTROLS)
 
     @commands.command()
     @guild_only_check()
