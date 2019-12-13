@@ -14,4 +14,3 @@ def pass_config_to_dependencies(config: Config, bot: Red, localtracks_folder: st
     _pass_config_to_playlist(config, bot)
     _pass_config_to_dataclasses(config, bot, localtracks_folder)
     _pass_config_to_utils(config, bot)
-
