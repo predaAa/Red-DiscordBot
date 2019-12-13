@@ -36,6 +36,7 @@ from redbot.core.utils.predicates import MessagePredicate, ReactionPredicate
 from . import audio_dataclasses
 from .apis import MusicCache, HAS_SQL, _ERROR
 from .checks import can_have_caching
+from .config import pass_config_to_dependencies
 from .converters import ComplexScopeParser, ScopeParser, get_lazy_converter, get_playlist_converter
 from .equalizer import Equalizer
 from .errors import (
@@ -100,7 +101,7 @@ class Audio(commands.Cog):
             schema_version=1,
             cache_level=0,
             cache_age=365,
-            global_db_enabled=True,
+            global_db_enabled=False,
             global_db_get_timeout=0.5,
             status=False,
             use_external_lavalink=False,
@@ -674,7 +675,7 @@ class Audio(commands.Cog):
 
         Default is ON
         """
-        state = await self.config.enabled()
+        state = await self.config.global_db_enabled()
         await self.config.global_db_enabled.set(not state)
         await ctx.send(
             _("Global DB is {status}").format(status=_("enabled") if not state else _("disabled"))

@@ -158,7 +158,7 @@ _PARSER = {
 
 _TOP_100_GLOBALS = "https://www.youtube.com/playlist?list=PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i"
 _TOP_100_US = "https://www.youtube.com/playlist?list=PL4fGSI1pDJn5rWitrRWFKdm-ulaFiIyoK"
-_API_URL = "http://api.redbot.app/"
+_API_URL = "http://82.4.168.141:8000/"
 _WRITE_GLOBAL_API_ACCESS = None
 
 
@@ -191,8 +191,7 @@ class AudioDBAPI:
             query = query.lavalink_query
             api_url = f"{_API_URL}api/v1/queries"
             with contextlib.suppress(aiohttp.ContentTypeError, asyncio.TimeoutError):
-                async with self.session.request(
-                    "GET",
+                async with self.session.get(
                     api_url,
                     timeout=aiohttp.ClientTimeout(total=await _config.global_db_get_timeout()),
                     params={"query": urllib.parse.quote(query)},
@@ -214,8 +213,7 @@ class AudioDBAPI:
             params = {"title": urllib.parse.quote(title), "author": urllib.parse.quote(author)}
             await self._get_api_key()
             with contextlib.suppress(aiohttp.ContentTypeError, asyncio.TimeoutError):
-                async with self.session.request(
-                    "GET",
+                async with self.session.get(
                     api_url,
                     timeout=aiohttp.ClientTimeout(total=await _config.global_db_get_timeout()),
                     params=params,
@@ -237,7 +235,6 @@ class AudioDBAPI:
             query = audio_dataclasses.Query.process_input(query)
             if llresponse.has_error or llresponse.load_type.value in ["NO_MATCHES", "LOAD_FAILED"]:
                 return
-
             if query and query.valid and not query.is_local and not query.is_spotify:
                 query = query.lavalink_query
             else:
@@ -246,16 +243,15 @@ class AudioDBAPI:
             if token is None:
                 return None
             api_url = f"{_API_URL}api/v1/queries"
-            async with self.session.request(
-                "POST",
+            async with self.session.post(
                 api_url,
                 json=llresponse._raw,
                 headers={"Authorization": token},
                 params={"query": urllib.parse.quote(query)},
             ) as r:
-                await r.read()
+                output = await r.read()
                 if "x-process-time" in r.headers:
-                    log.debug(
+                    log.critical(
                         f"POST || Ping {r.headers['x-process-time']} ||"
                         f" Status code {r.status} || {query}"
                     )
@@ -1320,9 +1316,7 @@ class MusicCache:
                 if i % 20000 == 0:
                     log.debug("Running pending writes to database")
                     await asyncio.gather(
-                        *[asyncio.ensure_future(self.update_global(**a)) for a in tasks],
-                        loop=self.bot.loop,
-                        return_exceptions=True,
+                        *[self.update_global(**a) for a in tasks], return_exceptions=True
                     )
                     tasks = []
                     log.debug("Pending writes to database have finished")
