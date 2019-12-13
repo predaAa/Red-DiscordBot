@@ -5,7 +5,6 @@ import datetime
 import heapq
 import json
 import logging
-import os
 import random
 import re
 import time
@@ -101,6 +100,8 @@ class Audio(commands.Cog):
             schema_version=1,
             cache_level=0,
             cache_age=365,
+            global_db_enabled=True,
+            global_db_get_timeout=0.5,
             status=False,
             use_external_lavalink=False,
             restrict=True,
@@ -661,6 +662,61 @@ class Audio(commands.Cog):
     async def audioset(self, ctx: commands.Context):
         """Music configuration options."""
         pass
+
+    @checks.is_owner()
+    @audioset.group(name="audiodb")
+    async def _audiodb(self, ctx: commands.Context):
+        """Change audiodb settings."""
+
+    @_audiodb.command(name="toggle")
+    async def _audiodb_toggle(self, ctx: commands.Context):
+        """Toggle the server settings.
+
+        Default is ON
+        """
+        state = await self.config.enabled()
+        await self.config.global_db_enabled.set(not state)
+        await ctx.send(
+            _("Global DB is {status}").format(status=_("enabled") if not state else _("disabled"))
+        )
+
+    @_audiodb.command(name="timeout")
+    async def _audiodb_timeout(self, ctx: commands.Context, timeout: Union[float, int]):
+        """Set GET request timeout.
+
+        Example: 0.1 = 100ms 1 = 1 second
+        """
+
+        await self.config.global_db_get_timeout.set(timeout)
+        await ctx.send(_(f"Request timeout set to {timeout} second(s)"))
+
+    @_audiodb.command(name="contribute")
+    async def contribute(self, ctx: commands.Context):
+        """Send your local DB upstream."""
+        tokens = await self.bot.get_shared_api_tokens("audiodb")
+        api_key = tokens.get("api_key", None)
+        if api_key is None:
+            return await ctx.send(
+                _(
+                    "Hey! Thanks for showing interest into contributing, "
+                    "currently you dont have access to this, "
+                    "if you wish to contribute please DM Draper#6666"
+                )
+            )
+        db_entries = await self.music_cache.fetch_all_contribute()
+        info = await ctx.send(
+            _(
+                "Sending {entries} entries to the global DB. "
+                "are you sure about this (It may take a very long time...)?"
+            ).format(entries=len(db_entries))
+        )
+        start_adding_reactions(info, ReactionPredicate.YES_OR_NO_EMOJIS)
+        pred = ReactionPredicate.yes_or_no(info, ctx.author)
+        await ctx.bot.wait_for("reaction_add", check=pred)
+        if not pred.result:
+            return await ctx.send(_("Cancelled!"))
+
+        await self.music_cache._api_contributer(ctx, db_entries)
 
     @audioset.command()
     @checks.mod_or_permissions(manage_messages=True)

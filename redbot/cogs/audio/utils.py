@@ -10,10 +10,10 @@ import lavalink
 
 from redbot.core import Config, commands
 from redbot.core.bot import Red
+
 from . import audio_dataclasses
-
+from .apis import _pass_config_to_api
 from .converters import _pass_config_to_converters
-
 from .playlists import _pass_config_to_playlist
 
 __all__ = [
@@ -48,9 +48,10 @@ def pass_config_to_dependencies(config: Config, bot: Red, localtracks_folder: st
     global _bot, _config
     _bot = bot
     _config = config
-    _pass_config_to_playlist(config, bot)
+    _pass_config_to_api(config)
     _pass_config_to_converters(config, bot)
     audio_dataclasses._pass_config_to_dataclasses(config, bot, localtracks_folder)
+    _pass_config_to_playlist(config, bot)
 
 
 def track_limit(track, maxlength):
