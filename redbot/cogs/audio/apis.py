@@ -1313,13 +1313,13 @@ class MusicCache:
                 if not _raw_query.is_local and not results.has_error and len(results.tracks) >= 1:
                     global_task = dict(llresponse=results, query=_raw_query)
                     tasks.append(global_task)
-                if i % 20000 == 0:
+                if i % 1000 == 0:
                     log.debug("Running pending writes to database")
                     await asyncio.gather(
                         *[self.update_global(**a) for a in tasks], return_exceptions=True
                     )
                     tasks = []
                     log.debug("Pending writes to database have finished")
-            if i % 20000 == 0:
+            if i % 1000 == 0:
                 await asyncio.sleep(5)
         await ctx.tick()
