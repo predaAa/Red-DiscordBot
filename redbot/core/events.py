@@ -21,7 +21,7 @@ from . import commands
 from .config import get_latest_confs
 from .data_manager import storage_type
 from .utils.chat_formatting import inline, bordered, format_perms_list, humanize_timedelta
-from .utils import fuzzy_command_search, format_fuzzy_results
+from .utils import fuzzy_command_search, format_fuzzy_results, menus
 
 log = logging.getLogger("red")
 init()

@@ -6,7 +6,7 @@ from redbot.core import checks, modlog, commands
 from redbot.core.bot import Red
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import box
-from redbot.core.utils.menus import menu, CUSTOM_DEFAULT_CONTROLS
+from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
 
 
 _ = Translator("ModLog", __file__)
@@ -134,7 +134,7 @@ class ModLog(commands.Cog):
 
         rendered_cases = [await case.message_content(embed=embed_requested) for case in cases]
 
-        await menu(ctx, rendered_cases, CUSTOM_DEFAULT_CONTROLS(ctx))
+        await menu(ctx, rendered_cases, DEFAULT_CONTROLS)
 
     @commands.command()
     @commands.guild_only()
