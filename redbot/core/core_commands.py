@@ -16,7 +16,7 @@ from collections import namedtuple
 from pathlib import Path
 from random import SystemRandom
 from string import ascii_letters, digits
-from typing import TYPE_CHECKING, Union, Tuple, List, Optional, Iterable, Sequence, Dict
+from typing import TYPE_CHECKING, Union, Tuple, List, Optional, Iterable, Sequence, Dict, Set
 
 import aiohttp
 import discord
@@ -72,7 +72,7 @@ class CoreLogic:
 
     async def _load(
         self, cog_names: Iterable[str]
-    ) -> Tuple[List[str], List[str], List[str], List[str], List[Tuple[str, str]]]:
+    ) -> Tuple[List[str], List[str], List[str], List[str], List[Tuple[str, str]], Set[str]]:
         """
         Loads cogs by name.
         Parameters
@@ -89,6 +89,7 @@ class CoreLogic:
         notfound_packages = []
         alreadyloaded_packages = []
         failed_with_reason_packages = []
+        repos_with_shared_libs = set()
 
         bot = self.bot
 
@@ -127,6 +128,20 @@ class CoreLogic:
             else:
                 await bot.add_loaded_package(name)
                 loaded_packages.append(name)
+                # remove in Red 3.3
+                downloader = bot.get_cog("Downloader")
+                if downloader is None:
+                    continue
+                try:
+                    maybe_repo = await downloader._shared_lib_load_check(name)
+                except Exception:
+                    log.exception(
+                        "Shared library check failed,"
+                        " if you're not using modified Downloader, report this issue."
+                    )
+                    maybe_repo = None
+                if maybe_repo is not None:
+                    repos_with_shared_libs.add(maybe_repo.name)
 
         return (
             loaded_packages,
@@ -134,6 +149,7 @@ class CoreLogic:
             notfound_packages,
             alreadyloaded_packages,
             failed_with_reason_packages,
+            repos_with_shared_libs,
         )
 
     @staticmethod
@@ -188,14 +204,26 @@ class CoreLogic:
 
     async def _reload(
         self, cog_names: Sequence[str]
-    ) -> Tuple[List[str], List[str], List[str], List[str], List[Tuple[str, str]]]:
+    ) -> Tuple[List[str], List[str], List[str], List[str], List[Tuple[str, str]], Set[str]]:
         await self._unload(cog_names)
 
-        loaded, load_failed, not_found, already_loaded, load_failed_with_reason = await self._load(
-            cog_names
-        )
+        (
+            loaded,
+            load_failed,
+            not_found,
+            already_loaded,
+            load_failed_with_reason,
+            repos_with_shared_libs,
+        ) = await self._load(cog_names)
 
-        return loaded, load_failed, not_found, already_loaded, load_failed_with_reason
+        return (
+            loaded,
+            load_failed,
+            not_found,
+            already_loaded,
+            load_failed_with_reason,
+            repos_with_shared_libs,
+        )
 
     async def _name(self, name: Optional[str] = None) -> str:
         """
@@ -606,7 +634,14 @@ class Core(commands.Cog, CoreLogic):
             return await ctx.send_help()
         cogs = tuple(map(lambda cog: cog.rstrip(","), cogs))
         async with ctx.typing():
-            loaded, failed, not_found, already_loaded, failed_with_reason = await self._load(cogs)
+            (
+                loaded,
+                failed,
+                not_found,
+                already_loaded,
+                failed_with_reason,
+                repos_with_shared_libs,
+            ) = await self._load(cogs)
 
         output = []
 
@@ -662,6 +697,21 @@ class Core(commands.Cog, CoreLogic):
                 ).format(reasons=reasons)
             output.append(formed)
 
+        if repos_with_shared_libs:
+            if len(repos_with_shared_libs) == 1:
+                formed = _(
+                    "**WARNING**: The following repo is using shared libs"
+                    " which are marked for removal in Red 3.3: {repo}.\n"
+                    "You should inform maintainer of the repo about this message."
+                ).format(repo=inline(repos_with_shared_libs.pop()))
+            else:
+                formed = _(
+                    "**WARNING**: The following repos are using shared libs"
+                    " which are marked for removal in Red 3.3: {repos}.\n"
+                    "You should inform maintainers of these repos about this message."
+                ).format(repos=humanize_list([inline(repo) for repo in repos_with_shared_libs]))
+            output.append(formed)
+
         if output:
             total_message = "\n\n".join(output)
             for page in pagify(total_message):
@@ -713,9 +763,14 @@ class Core(commands.Cog, CoreLogic):
             return await ctx.send_help()
         cogs = tuple(map(lambda cog: cog.rstrip(","), cogs))
         async with ctx.typing():
-            loaded, failed, not_found, already_loaded, failed_with_reason = await self._reload(
-                cogs
-            )
+            (
+                loaded,
+                failed,
+                not_found,
+                already_loaded,
+                failed_with_reason,
+                repos_with_shared_libs,
+            ) = await self._reload(cogs)
 
         output = []
 
@@ -758,6 +813,21 @@ class Core(commands.Cog, CoreLogic):
                 formed = _(
                     "These packages could not be reloaded for the following reasons:\n\n{reasons}"
                 ).format(reasons=reasons)
+            output.append(formed)
+
+        if repos_with_shared_libs:
+            if len(repos_with_shared_libs) == 1:
+                formed = _(
+                    "**WARNING**: The following repo is using shared libs"
+                    " which are marked for removal in Red 3.3: {repo}.\n"
+                    "You should inform maintainers of these repos about this message."
+                ).format(repo=inline(repos_with_shared_libs.pop()))
+            else:
+                formed = _(
+                    "**WARNING**: The following repos are using shared libs"
+                    " which are marked for removal in Red 3.3: {repos}.\n"
+                    "You should inform maintainers of these repos about this message."
+                ).format(repos=humanize_list([inline(repo) for repo in repos_with_shared_libs]))
             output.append(formed)
 
         if output:
@@ -1612,12 +1682,14 @@ class Core(commands.Cog, CoreLogic):
             e.add_field(name="System arch", value=platform.machine(), inline=True)
             e.add_field(name="User", value=user_who_ran, inline=True)
             e.add_field(name="OS version", value=osver, inline=False)
+            e.add_field(name="Python executable", value=sys.executable, inline=False)
             await ctx.send(embed=e)
         else:
             info = (
                 "Debug Info for Red\n\n"
                 + "Red version: {}\n".format(redver)
                 + "Python version: {}\n".format(pyver)
+                + "Python executable: {}\n".format(sys.executable)
                 + "Discord.py version: {}\n".format(dpy_version)
                 + "Pip version: {}\n".format(pipver)
                 + "System arch: {}\n".format(platform.machine())
@@ -1635,13 +1707,14 @@ class Core(commands.Cog, CoreLogic):
         pass
 
     @whitelist.command(name="add")
-    async def whitelist_add(self, ctx, user: discord.User):
+    async def whitelist_add(self, ctx, *, user: Union[discord.Member, int]):
         """
         Adds a user to the whitelist.
         """
+        uid = getattr(user, "id", user)
         async with ctx.bot._config.whitelist() as curr_list:
-            if user.id not in curr_list:
-                curr_list.append(user.id)
+            if uid not in curr_list:
+                curr_list.append(uid)
 
         await ctx.send(_("User added to whitelist."))
 
@@ -1660,16 +1733,16 @@ class Core(commands.Cog, CoreLogic):
             await ctx.send(box(page))
 
     @whitelist.command(name="remove")
-    async def whitelist_remove(self, ctx: commands.Context, *, user: discord.User):
+    async def whitelist_remove(self, ctx: commands.Context, *, user: Union[discord.Member, int]):
         """
         Removes user from whitelist.
         """
         removed = False
-
+        uid = getattr(user, "id", user)
         async with ctx.bot._config.whitelist() as curr_list:
-            if user.id in curr_list:
+            if uid in curr_list:
                 removed = True
-                curr_list.remove(user.id)
+                curr_list.remove(uid)
 
         if removed:
             await ctx.send(_("User has been removed from whitelist."))
@@ -1693,7 +1766,7 @@ class Core(commands.Cog, CoreLogic):
         pass
 
     @blacklist.command(name="add")
-    async def blacklist_add(self, ctx: commands.Context, *, user: discord.User):
+    async def blacklist_add(self, ctx: commands.Context, *, user: Union[discord.Member, int]):
         """
         Adds a user to the blacklist.
         """
@@ -1701,9 +1774,10 @@ class Core(commands.Cog, CoreLogic):
             await ctx.send(_("You cannot blacklist an owner!"))
             return
 
+        uid = getattr(user, "id", user)
         async with ctx.bot._config.blacklist() as curr_list:
-            if user.id not in curr_list:
-                curr_list.append(user.id)
+            if uid not in curr_list:
+                curr_list.append(uid)
 
         await ctx.send(_("User added to blacklist."))
 
@@ -1722,16 +1796,17 @@ class Core(commands.Cog, CoreLogic):
             await ctx.send(box(page))
 
     @blacklist.command(name="remove")
-    async def blacklist_remove(self, ctx: commands.Context, *, user: discord.User):
+    async def blacklist_remove(self, ctx: commands.Context, *, user: Union[discord.Member, int]):
         """
         Removes user from blacklist.
         """
         removed = False
 
+        uid = getattr(user, "id", user)
         async with ctx.bot._config.blacklist() as curr_list:
-            if user.id in curr_list:
+            if uid in curr_list:
                 removed = True
-                curr_list.remove(user.id)
+                curr_list.remove(uid)
 
         if removed:
             await ctx.send(_("User has been removed from blacklist."))
@@ -1757,12 +1832,16 @@ class Core(commands.Cog, CoreLogic):
 
     @localwhitelist.command(name="add")
     async def localwhitelist_add(
-        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role]
+        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role, int]
     ):
         """
         Adds a user or role to the whitelist.
         """
         user = isinstance(user_or_role, discord.Member)
+        if isinstance(user_or_role, int):
+            user_or_role = discord.Object(id=user_or_role)
+            user = True
+
         async with ctx.bot._config.guild(ctx.guild).whitelist() as curr_list:
             if user_or_role.id not in curr_list:
                 curr_list.append(user_or_role.id)
@@ -1788,12 +1867,15 @@ class Core(commands.Cog, CoreLogic):
 
     @localwhitelist.command(name="remove")
     async def localwhitelist_remove(
-        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role]
+        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role, int]
     ):
         """
         Removes user or role from whitelist.
         """
         user = isinstance(user_or_role, discord.Member)
+        if isinstance(user_or_role, int):
+            user_or_role = discord.Object(id=user_or_role)
+            user = True
 
         removed = False
         async with ctx.bot._config.guild(ctx.guild).whitelist() as curr_list:
@@ -1831,12 +1913,15 @@ class Core(commands.Cog, CoreLogic):
 
     @localblacklist.command(name="add")
     async def localblacklist_add(
-        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role]
+        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role, int]
     ):
         """
         Adds a user or role to the blacklist.
         """
         user = isinstance(user_or_role, discord.Member)
+        if isinstance(user_or_role, int):
+            user_or_role = discord.Object(id=user_or_role)
+            user = True
 
         if user and await ctx.bot.is_owner(user_or_role):
             await ctx.send(_("You cannot blacklist an owner!"))
@@ -1867,13 +1952,16 @@ class Core(commands.Cog, CoreLogic):
 
     @localblacklist.command(name="remove")
     async def localblacklist_remove(
-        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role]
+        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role, int]
     ):
         """
         Removes user or role from blacklist.
         """
         removed = False
         user = isinstance(user_or_role, discord.Member)
+        if isinstance(user_or_role, int):
+            user_or_role = discord.Object(id=user_or_role)
+            user = True
 
         async with ctx.bot._config.guild(ctx.guild).blacklist() as curr_list:
             if user_or_role.id in curr_list:
