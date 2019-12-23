@@ -5,13 +5,73 @@
 import asyncio
 import contextlib
 import functools
-from typing import Union, Iterable, Optional
+from typing import Union, Iterable, Optional, Mapping
 import discord
 
 from .. import commands
 from .predicates import ReactionPredicate
 
 _ReactableEmoji = Union[str, discord.Emoji]
+
+PREFERED_CONTROLS = {}
+
+
+def update_controls(bot):  # Call this at the init to update the globals
+    global PREFERED_CONTROLS
+
+    PREFERED_CONTROLS.update(
+        {
+            "\N{BLACK LEFT-POINTING TRIANGLE}\N{VARIATION SELECTOR-16}": bot.get_emoji(
+                647175085592936458
+            )
+        }
+    )
+    PREFERED_CONTROLS.update({"\N{LEFTWARDS BLACK ARROW}": bot.get_emoji(647175085592936458)})
+    PREFERED_CONTROLS.update({"⬅️": bot.get_emoji(647175085592936458)})
+    PREFERED_CONTROLS.update({"⬅": bot.get_emoji(647175085592936458)})
+
+    PREFERED_CONTROLS.update({"\N{CROSS MARK}": bot.get_emoji(632685164408995870)})
+    PREFERED_CONTROLS.update({"❌": bot.get_emoji(632685164408995870)})
+
+    PREFERED_CONTROLS.update(
+        {
+            "\N{BLACK RIGHT-POINTING TRIANGLE}\N{VARIATION SELECTOR-16}": bot.get_emoji(
+                647178261394358325
+            )
+        }
+    )
+    PREFERED_CONTROLS.update({"\N{BLACK RIGHTWARDS ARROW}": bot.get_emoji(647178261394358325)})
+    PREFERED_CONTROLS.update({"➡️": bot.get_emoji(647178261394358325)})
+    PREFERED_CONTROLS.update({"➡": bot.get_emoji(647178261394358325)})
+
+
+def update_icons(ctx: commands.Context, controls: Mapping, prefered_controls: Mapping) -> Mapping:
+    has_external_emoji = ctx.me.permissions_in(ctx.channel).external_emojis
+    if not has_external_emoji:
+        return controls
+    items = controls.items()
+    new_controls = {}
+    for i, v in items:
+        new_emoji = prefered_controls.get(i) or i
+        new_controls.update({new_emoji: v})
+    return new_controls
+
+
+def update_icon_adding(message: discord.Message, emojis: Iterable[_ReactableEmoji]):
+    channel = message.channel
+    guild = getattr(channel, "guild", None)
+    if guild:
+        user = guild.me
+    else:
+        user = channel.me
+    has_external_emoji = message.channel.permissions_for(user).external_emojis
+
+    if not has_external_emoji:
+        return emojis
+    newemojis = []
+    for i in emojis:
+        newemojis.append(PREFERED_CONTROLS.get(i) or i)
+    return newemojis
 
 
 async def menu(
@@ -60,7 +120,8 @@ async def menu(
         isinstance(x, str) for x in pages
     ):
         raise RuntimeError("All pages must be of the same type")
-    for key, value in controls.items():
+    new_controls = update_icons(ctx, controls, PREFERED_CONTROLS)
+    for key, value in new_controls.items():
         maybe_coro = value
         if isinstance(value, functools.partial):
             maybe_coro = value.func
@@ -75,7 +136,7 @@ async def menu(
             message = await ctx.send(current_page)
         # Don't wait for reactions to be added (GH-1797)
         # noinspection PyAsyncCall
-        start_adding_reactions(message, controls.keys(), ctx.bot.loop)
+        start_adding_reactions(message, new_controls.keys(), ctx.bot.loop)
     else:
         try:
             if isinstance(current_page, discord.Embed):
@@ -88,20 +149,20 @@ async def menu(
     try:
         react, user = await ctx.bot.wait_for(
             "reaction_add",
-            check=ReactionPredicate.with_emojis(tuple(controls.keys()), message, ctx.author),
+            check=ReactionPredicate.with_emojis(tuple(new_controls.keys()), message, ctx.author),
             timeout=timeout,
         )
     except asyncio.TimeoutError:
         try:
             await message.clear_reactions()
         except discord.Forbidden:  # cannot remove all reactions
-            for key in controls.keys():
-                await message.remove_reaction(key, ctx.bot.user)
+            for key in new_controls.keys():
+                await message.remove_reaction(key, ctx.me)
         except discord.NotFound:
             return
     else:
-        return await controls[react.emoji](
-            ctx, pages, controls, message, page, timeout, react.emoji
+        return await new_controls[react.emoji](
+            ctx, pages, new_controls, message, page, timeout, react.emoji
         )
 
 
@@ -192,11 +253,12 @@ def start_adding_reactions(
         The task for the coroutine adding the reactions.
 
     """
-
+    new_emojis = update_icon_adding(message, emojis)
+    
     async def task():
         # The task should exit silently if the message is deleted
         with contextlib.suppress(discord.NotFound):
-            for emoji in emojis:
+            for emoji in new_emojis:
                 await message.add_reaction(emoji)
 
     if loop is None:

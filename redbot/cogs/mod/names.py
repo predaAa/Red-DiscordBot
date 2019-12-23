@@ -112,17 +112,59 @@ class ModInfo(MixinMeta):
         created_on = _("{}\n({} days ago)").format(user_created, since_created)
         joined_on = _("{}\n({} days ago)").format(user_joined, since_joined)
 
+        if user.status.name == "online":
+            if user.is_on_mobile() is True:
+                statusemoji = "https://cdn.discordapp.com/emojis/554418132953989140.png?v=1"
+            else:
+                statusemoji = "https://cdn.discordapp.com/emojis/642458713738838017.png?v=1"
+        elif user.status.name == "offline":
+            statusemoji = "https://cdn.discordapp.com/emojis/642458714074513427.png?v=1"
+        elif user.status.name == "dnd":
+            statusemoji = "https://cdn.discordapp.com/emojis/642458714145816602.png?v=1"
+        elif user.status.name == "streaming":
+            statusemoji = "https://cdn.discordapp.com/emojis/642458713692569602.png?v=1"
+        elif user.status.name == "idle":
+            statusemoji = "https://cdn.discordapp.com/emojis/642458714003210240.png?v=1"
+
         activity = _("Chilling in {} status").format(user.status)
         if user.activity is None:  # Default status
+            cstatus = None
             pass
         elif user.activity.type == discord.ActivityType.playing:
             activity = _("Playing {}").format(user.activity.name)
+            try:
+                cstatus = user.activities[1].state
+            except:
+                cstatus = None
+                pass
         elif user.activity.type == discord.ActivityType.streaming:
             activity = _("Streaming [{}]({})").format(user.activity.name, user.activity.url)
+            try:
+                cstatus = user.activities[1].state
+            except:
+                cstatus = None
+                pass
         elif user.activity.type == discord.ActivityType.listening:
-            activity = _("Listening to {}").format(user.activity.name)
+            activity = _("Listening to ``{} by {} on {}``").format(user.activity.title, user.activity.artist, user.activity.name)
+            try:
+                cstatus = user.activities[1].state
+            except:
+                cstatus = None
+                pass
         elif user.activity.type == discord.ActivityType.watching:
             activity = _("Watching {}").format(user.activity.name)
+            try:
+                cstatus = user.activities[1].state
+            except:
+                cstatus = None
+                pass
+        else:
+            try:
+                cstatus = user.activities[0].state
+            except:
+                cstatus = None
+                pass
+                
 
         if roles:
 
@@ -160,7 +202,10 @@ class ModInfo(MixinMeta):
         else:
             role_str = None
 
-        data = discord.Embed(description=activity, colour=user.colour)
+        if cstatus is None:
+            data = discord.Embed(description="{}".format(activity), colour=user.colour)
+        else:
+            data = discord.Embed(description="{}\nCustom Status: {}".format(activity, cstatus), colour=user.colour)
         data.add_field(name=_("Joined Discord on"), value=created_on)
         data.add_field(name=_("Joined this server on"), value=joined_on)
         if role_str is not None:
@@ -187,7 +232,7 @@ class ModInfo(MixinMeta):
 
         if user.avatar:
             avatar = user.avatar_url_as(static_format="png")
-            data.set_author(name=name, url=avatar)
+            data.set_author(name=name, url=avatar, icon_url=statusemoji)
             data.set_thumbnail(url=avatar)
         else:
             data.set_author(name=name)
