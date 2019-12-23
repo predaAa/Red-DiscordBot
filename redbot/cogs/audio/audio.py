@@ -6540,8 +6540,8 @@ class Audio(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @commands.bot_has_permissions(embed_links=True)
-    async def remove(self, ctx: commands.Context, index: int):
-        """Remove a specific track number from the queue."""
+    async def remove(self, ctx: commands.Context, index_or_url: Union[int, str]):
+        """Remove a specific track number or url from the queue."""
         dj_enabled = self._dj_status_cache.setdefault(
             ctx.guild.id, await self.config.guild(ctx.guild).dj_enabled()
         )
@@ -6565,20 +6565,47 @@ class Audio(commands.Cog):
                 title=_("Unable To Modify Queue"),
                 description=_("You must be in the voice channel to manage the queue."),
             )
-        if index > len(player.queue) or index < 1:
-            return await self._embed_msg(
+        if isinstance(index_or_url, int):
+            if index_or_url > len(player.queue) or index_or_url < 1:
+                return await self._embed_msg(
+                    ctx,
+                    title=_("Unable To Modify Queue"),
+                    description=_(
+                        "Song number must be greater than 1 and within the queue limit."
+                    ),
+                )
+            index_or_url -= 1
+            removed = player.queue.pop(index_or_url)
+            removed_title = get_track_description(removed)
+            await self._embed_msg(
                 ctx,
-                title=_("Unable To Modify Queue"),
-                description=_("Song number must be greater than 1 and within the queue limit."),
+                title=_("Removed track from queue"),
+                description=_("Removed {track} from the queue.").format(track=removed_title),
             )
-        index -= 1
-        removed = player.queue.pop(index)
-        removed_title = get_track_description(removed)
-        await self._embed_msg(
-            ctx,
-            title=_("Removed track from queue"),
-            description=_("Removed {track} from the queue.").format(track=removed_title),
-        )
+        else:
+            clean_tracks = []
+            removed_tracks = 0
+            for track in player.queue:
+                if track.uri != index_or_url:
+                    clean_tracks.append(track)
+                else:
+                    removed_tracks += 1
+            player.queue = clean_tracks
+            if removed_tracks == 0:
+                await self._embed_msg(
+                    ctx,
+                    title=_("Unable To Modify Queue"),
+                    description=_("Removed 0 tracks, nothing matches the URL provided."),
+                )
+            else:
+                await self._embed_msg(
+                    ctx,
+                    title=_("Removed track from queue"),
+                    description=_(
+                        "Removed {removed_tracks} tracks from queue "
+                        "which matched the URL provided."
+                    ).format(removed_tracks=removed_tracks),
+                )
 
     @commands.command()
     @commands.guild_only()
@@ -7940,6 +7967,51 @@ class Audio(commands.Cog):
             return False
         except KeyError:
             return False
+
+    @commands.Cog.listener()
+    async def on_red_audio_track_start(
+        self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
+    ):
+        scope = PlaylistScope.GUILD.value
+        today = datetime.date.today()
+        midnight = datetime.datetime.combine(today, datetime.datetime.min.time())
+        name = f"Daily playlist - {today}"
+        today_id = int(time.mktime(today.timetuple()))
+        track = track_to_json(track)
+
+        try:
+            playlist = await get_playlist(
+                playlist_number=today_id,
+                scope=PlaylistScope.GUILD.value,
+                bot=self.bot,
+                guild=guild,
+                author=self.bot.user,
+            )
+        except RuntimeError:
+            playlist = None
+
+        if playlist:
+            tracks = playlist.tracks
+            tracks.append(track)
+            await playlist.edit({"tracks": tracks})
+        else:
+            playlist = Playlist(
+                bot=self.bot,
+                scope=scope,
+                author=self.bot.user.id,
+                playlist_id=today_id,
+                name=name,
+                playlist_url=None,
+                tracks=[track],
+                guild=guild,
+            )
+            await playlist.save()
+        with contextlib.suppress(Exception):
+            too_old = midnight - datetime.timedelta(days=8)
+            too_old_id = int(time.mktime(too_old.timetuple()))
+            await delete_playlist(
+                scope=scope, playlist_id=too_old_id, guild=guild, author=self.bot.user
+            )
 
     @commands.Cog.listener()
     async def on_voice_state_update(

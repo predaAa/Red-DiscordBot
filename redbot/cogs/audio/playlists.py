@@ -114,7 +114,7 @@ class PlaylistMigration23:  # TODO: remove me in a future version ?
         playlist_id: int,
         name: str,
         playlist_url: Optional[str] = None,
-        tracks: Optional[List[dict]] = None,
+        tracks: Optional[List[Mapping]] = None,
         guild: Union[discord.Guild, int, None] = None,
     ):
         self.guild = guild
@@ -127,7 +127,7 @@ class PlaylistMigration23:  # TODO: remove me in a future version ?
 
     @classmethod
     async def from_json(
-        cls, scope: str, playlist_number: int, data: dict, **kwargs
+        cls, scope: str, playlist_number: int, data: Mapping, **kwargs
     ) -> "PlaylistMigration23":
         """Get a Playlist object from the provided information.
         Parameters
@@ -255,7 +255,7 @@ class Playlist:
         playlist_id: int,
         name: str,
         playlist_url: Optional[str] = None,
-        tracks: Optional[List[dict]] = None,
+        tracks: Optional[List[Mapping]] = None,
         guild: Union[discord.Guild, int, None] = None,
     ):
         self.bot = bot
@@ -281,7 +281,7 @@ class Playlist:
             f"tracks={len(self.tracks)}, url={self.url})"
         )
 
-    async def edit(self, data: dict):
+    async def edit(self, data: Mapping):
         """
         Edits a Playlist.
         Parameters
@@ -311,7 +311,7 @@ class Playlist:
             tracks=self.tracks,
         )
 
-    def to_json(self) -> dict:
+    def to_json(self) -> Mapping:
         """Transform the object to a dict.
         Returns
         -------
