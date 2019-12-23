@@ -150,6 +150,8 @@ class KickBanMixin(MixinMeta):
                                         f"{guild.name}({guild.id}) guild due to permissions"
                                     )
                                     break  # skip the rest of this guild
+                                elif e.code == 10026:
+                                    break
                                 log.info(f"Failed to unban member: error code: {e.code}")
             await asyncio.sleep(60)
 

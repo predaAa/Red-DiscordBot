@@ -102,15 +102,11 @@ class NoSubCommand(Exception):
 class RedHelpFormatter:
     """
     Red's help implementation
-
     This is intended to be overridable in parts to only change some behavior.
-
     While currently, there is a global formatter, later plans include a context specific
     formatter selector as well as an API for cogs to register/un-register a formatter with the bot.
-
     When implementing your own formatter, at minimum you must provide an implementation of 
     `send_help` with identical signature.
-
     While this exists as a class for easy partial overriding, most implementations
     should not need or want a shared state.
     """
@@ -611,7 +607,6 @@ class RedHelpFormatter:
             asyncio.create_task(menus.menu(ctx, pages, c, message=m))
             # menu needs reactions added manually since we fed it a messsage
             menus.start_adding_reactions(m, c.keys())
-
 
 @commands.command(name="help", hidden=True, i18n=T_)
 async def red_help(ctx: Context, *, thing_to_get_help_for: str = None):

@@ -2,12 +2,14 @@ import asyncio
 import inspect
 import logging
 import os
+import time
 from collections import namedtuple
 from datetime import datetime
 from enum import Enum
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import Optional, Union, List, Dict, NoReturn
+from collections import Counter
 from types import MappingProxyType
 
 import discord
@@ -42,12 +44,15 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
     """
 
     def __init__(self, *args, cli_flags=None, bot_dir: Path = Path.cwd(), **kwargs):
+        self.launch_time = int(time.perf_counter())
         self._shutdown_mode = ExitCodes.CRITICAL
         self._config = Config.get_core_conf(force_registration=False)
         self._co_owners = cli_flags.co_owner
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
         self._last_exception = None
+        self.command_stats = Counter()
+        self.socket_stats = Counter()
         self._config.register_global(
             token=None,
             prefix=[],
@@ -130,7 +135,6 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
         self._uptime = None
         self._checked_time_accuracy = None
         self._color = discord.Embed.Empty  # This is needed or color ends up 0x000000
-
         self._main_dir = bot_dir
         self._cog_mgr = CogManager()
         super().__init__(*args, help_command=None, **kwargs)
@@ -324,7 +328,6 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
         return self._color
 
     get_embed_colour = get_embed_color
-
     # start config migrations
     async def _maybe_update_config(self):
         """
