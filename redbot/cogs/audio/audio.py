@@ -3885,8 +3885,10 @@ class Audio(commands.Cog):
                 correct_scope_matches = [p for p in correct_scope_matches if p.id == arg]
             if match_count > 10:
                 raise TooManyMatches(
-                    f"{match_count} playlists match {original_input}: "
-                    f"Please try to be more specific, or use the playlist ID."
+                    _(
+                        "{match_count} playlists match {original_input}: "
+                        "Please try to be more specific, or use the playlist ID."
+                    ).format(match_count=match_count, original_input=original_input)
                 )
         elif match_count == 1:
             return correct_scope_matches[0].id, original_input
@@ -3898,19 +3900,25 @@ class Audio(commands.Cog):
         playlists = f"{'#':{pos_len}}\n"
 
         for number, playlist in enumerate(correct_scope_matches, 1):
-            author = self.bot.get_user(playlist.author) or "Unknown"
-            line = (
-                f"{number}."
-                f"    <{playlist.name}>\n"
-                f" - Scope:  < {humanize_scope(scope)} >\n"
-                f" - ID:     < {playlist.id} >\n"
-                f" - Tracks: < {len(playlist.tracks)} >\n"
-                f" - Author: < {author} >\n\n"
+            author = self.bot.get_user(playlist.author) or playlist.author or _("Unknown")
+            line = _(
+                "{number}."
+                "    <{playlist.name}>\n"
+                " - Scope:  < {scope} >\n"
+                " - ID:     < {playlist.id} >\n"
+                " - Tracks: < {tracks} >\n"
+                " - Author: < {author} >\n\n"
+            ).format(
+                number=number,
+                playlist=playlist,
+                scope=humanize_scope(scope),
+                tracks=len(playlist.tracks),
+                author=author,
             )
             playlists += line
 
         embed = discord.Embed(
-            title="Playlists found, which one would you like?",
+            title=_("Playlists found, which one would you like?"),
             description=box(playlists, lang="md"),
             colour=await context.embed_colour(),
         )
@@ -3927,13 +3935,13 @@ class Audio(commands.Cog):
             with contextlib.suppress(discord.HTTPException):
                 await msg.delete()
             raise TooManyMatches(
-                "Too many matches found and you did not select which one you wanted."
+                _("Too many matches found and you did not select which one you wanted.")
             )
         if emojis[pred.result] == "\N{CROSS MARK}":
             with contextlib.suppress(discord.HTTPException):
                 await msg.delete()
             raise TooManyMatches(
-                "Too many matches found and you did not select which one you wanted."
+                _("Too many matches found and you did not select which one you wanted.")
             )
         with contextlib.suppress(discord.HTTPException):
             await msg.delete()
@@ -4840,7 +4848,11 @@ class Audio(commands.Cog):
                         bold(playlist.name),
                         _("ID: {id}").format(id=playlist.id),
                         _("Tracks: {num}").format(num=len(playlist.tracks)),
-                        _("Author: {name}\n").format(name=self.bot.get_user(playlist.author)),
+                        _("Author: {name}\n").format(
+                            name=self.bot.get_user(playlist.author)
+                            or playlist.author
+                            or _("Unknown")
+                        ),
                     )
                 )
             )
