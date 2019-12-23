@@ -132,7 +132,7 @@ class AudioDBAPI:
             ) as r:
                 output = await r.read()
                 if "x-process-time" in r.headers:
-                    log.critical(
+                    log.debug(
                         f"POST || Ping {r.headers['x-process-time']} ||"
                         f" Status code {r.status} || {query}"
                     )
