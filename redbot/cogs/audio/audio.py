@@ -8048,6 +8048,7 @@ class Audio(commands.Cog):
             for track in track_data:
                 player.add(guild.get_member(track.extras.get("requester")), track.track_object)
             player.maybe_shuffle()
+            await player.play()
 
     def cog_unload(self):
         if not self._cleaned_up:
