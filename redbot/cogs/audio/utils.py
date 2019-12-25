@@ -238,18 +238,7 @@ def track_creator(player, position=None, other_track=None) -> Mapping:
         queued_track = other_track
     else:
         queued_track = player.queue[position]
-    track_keys = queued_track._info.keys()
-    track_values = queued_track._info.values()
-    track_id = queued_track.track_identifier
-    track_info = {}
-    for k, v in zip(track_keys, track_values):
-        track_info[k] = v
-    keys = ["track", "info"]
-    values = [track_id, track_info]
-    track_obj = {}
-    for key, value in zip(keys, values):
-        track_obj[key] = value
-    return track_obj
+    return track_to_json(queued_track)
 
 
 def track_to_json(track: lavalink.Track) -> Mapping:
@@ -259,7 +248,7 @@ def track_to_json(track: lavalink.Track) -> Mapping:
     track_info = {}
     for k, v in zip(track_keys, track_values):
         track_info[k] = v
-    keys = ["track", "info"]
+    keys = ["track", "info", "extras"]
     values = [track_id, track_info]
     track_obj = {}
     for key, value in zip(keys, values):

@@ -19,7 +19,7 @@ from redbot.core.bot import Red
 from redbot.core.i18n import Translator, cog_i18n
 
 from . import audio_dataclasses
-from .databases import CacheInterface, SQLError
+from .databases import CacheInterface, SQLError, QueueInterface
 from .errors import DatabaseError, SpotifyFetchError, YouTubeApiError
 from .playlists import get_playlist
 from .utils import CacheLevel, Notifier, is_allowed, queue_duration, track_limit
@@ -31,18 +31,21 @@ _TOP_100_GLOBALS = "https://www.youtube.com/playlist?list=PL4fGSI1pDJn6puJdseH2R
 _TOP_100_US = "https://www.youtube.com/playlist?list=PL4fGSI1pDJn5rWitrRWFKdm-ulaFiIyoK"
 
 _database: CacheInterface = None
+_persist_queue: QueueInterface = None
 _bot: Red = None
 _config: Config = None
 
 
 def _pass_config_to_apis(config: Config, bot: Red):
-    global _database, _config, _bot
+    global _database, _config, _bot, _persist_queue
     if _config is None:
         _config = config
     if _bot is None:
         _bot = bot
     if _database is None:
         _database = CacheInterface()
+    if _persist_queue is None:
+        _persist_queue = QueueInterface()
 
 
 class SpotifyAPI:
@@ -210,6 +213,7 @@ class MusicCache:
         self.youtube_api: YouTubeAPI = YouTubeAPI(bot, session)
         self._session: aiohttp.ClientSession = session
         self.database = _database
+        self.persist_queue = _persist_queue
 
         self._tasks: Mapping = {}
         self._lock: asyncio.Lock = asyncio.Lock()

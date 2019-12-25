@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Union
 
 import apsw
+import lavalink
 
 from redbot.core import Config
 from redbot.core.bot import Red
@@ -14,7 +15,7 @@ from redbot.core.data_manager import cog_data_path
 
 from .errors import InvalidTableError
 from .sql_statements import *
-from .utils import PlaylistScope
+from .utils import PlaylistScope, track_to_json
 
 log = logging.getLogger("red.audio.database")
 _config: Config = None
@@ -67,6 +68,20 @@ class PlaylistFetchResult:
     def __post_init__(self):
         if isinstance(self.tracks, str):
             self.tracks = json.loads(self.tracks)
+
+
+@dataclass
+class QueueFetchResult:
+    guild_id: int
+    room_id: int
+    track: dict = field(default_factory=lambda: {})
+    track_object: lavalink.Track = None
+
+    def __post_init__(self):
+        if isinstance(self.track, str):
+            self.track = json.loads(self.track)
+        if self.track:
+            self.track_object = lavalink.Track(self.track)
 
 
 @dataclass
@@ -308,6 +323,53 @@ class PlaylistInterface:
                     "author_id": int(author_id),
                     "playlist_url": playlist_url,
                     "tracks": json.dumps(tracks),
+                }
+            ),
+        )
+
+
+class QueueInterface:
+    def __init__(self):
+        self.cursor = database_connection.cursor()
+        self.cursor.execute(PRAGMA_SET_temp_store)
+        self.cursor.execute(PRAGMA_SET_journal_mode)
+        self.cursor.execute(PRAGMA_SET_read_uncommitted)
+        self.cursor.execute(PERSIST_QUEUE_CREATE_TABLE)
+        self.cursor.execute(PERSIST_QUEUE_CREATE_INDEX)
+
+    @staticmethod
+    def close():
+        with contextlib.suppress(Exception):
+            database_connection.close()
+
+    def fetch(self) -> List[QueueFetchResult]:
+        output = self.cursor.execute(PERSIST_QUEUE_FETCH_ALL).fetchall() or []
+
+        return [PlaylistFetchResult(*row) for row in output] if output else []
+
+    def played(self, guild_id: int, unix_time: int):
+        return self.cursor.execute(
+            PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "time": unix_time})
+        )
+
+    def delete_scheduled(self):
+        return self.cursor.execute(PERSIST_QUEUE_DELETE_SCHEDULED)
+
+    def drop(self, guild_id: int):
+        return self.cursor.execute(PERSIST_QUEUE_BULK_PLAYED, ({"guild_id": guild_id}))
+
+    def enqueued(self, guild_id: int, room_id: int, track: lavalink.Track):
+        enqueue_time = track.extras.get("enqueue_time", 0)
+        track = track_to_json(track)
+        self.cursor.execute(
+            PERSIST_QUEUE_UPSERT,
+            (
+                {
+                    "guild_id": int(guild_id),
+                    "room_id": int(room_id),
+                    "played": False,
+                    "time": enqueue_time,
+                    "track": json.dumps(track),
                 }
             ),
         )
