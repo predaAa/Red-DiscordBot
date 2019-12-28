@@ -4,7 +4,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
 import apsw
 
@@ -17,9 +17,17 @@ from .sql_statements import *
 from .utils import PlaylistScope
 
 log = logging.getLogger("red.audio.database")
-_config: Config = None
-_bot: Red = None
-database_connection: apsw.Connection = None
+
+if TYPE_CHECKING:
+    database_connection: apsw.Connection
+    _bot: Red
+    _config: Config
+else:
+    _database = None
+    _bot = None
+    database_connection = None
+
+
 SCHEMA_VERSION = 3
 SQLError = apsw.ExecutionCompleteError
 

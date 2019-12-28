@@ -8,7 +8,7 @@ import random
 import time
 import urllib.parse
 from collections import namedtuple
-from typing import Callable, List, Optional, Tuple, Union, Mapping
+from typing import Callable, List, Mapping, Optional, Tuple, Union, TYPE_CHECKING
 
 import aiohttp
 import discord
@@ -34,9 +34,14 @@ _API_URL = "http://82.4.168.141:8000/"
 _WRITE_GLOBAL_API_ACCESS = None
 
 
-_database: CacheInterface = None
-_bot: Red = None
-_config: Config = None
+if TYPE_CHECKING:
+    _database: CacheInterface
+    _bot: Red
+    _config: Config
+else:
+    _database = None
+    _bot = None
+    _config = None
 
 
 def _pass_config_to_apis(config: Config, bot: Red):
