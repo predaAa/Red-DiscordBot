@@ -857,6 +857,7 @@ class MusicCache:
         valid_global_entry = True
         results = None
         globaldb_toggle = await _config.global_db_enabled()
+        called_api = False
 
         if cache_enabled and not forced and not _raw_query.is_local:
             update = True
@@ -911,8 +912,8 @@ class MusicCache:
                 results = await player.load_tracks(query)
             except KeyError:
                 results = None
-            if results is None:
-                results = LoadResult({"loadType": "LOAD_FAILED", "playlistInfo": {}, "tracks": []})
+        if results is None:
+            results = LoadResult({"loadType": "LOAD_FAILED", "playlistInfo": {}, "tracks": []})
             valid_global_entry = False
         update_global = globaldb_toggle and not valid_global_entry and _WRITE_GLOBAL_API_ACCESS
         with contextlib.suppress(Exception):
