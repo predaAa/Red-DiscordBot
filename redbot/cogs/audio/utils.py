@@ -1,9 +1,10 @@
 import asyncio
 import contextlib
 import functools
-import os
 import re
 import time
+from enum import Enum, unique
+from typing import MutableMapping, Optional, TYPE_CHECKING
 from urllib.parse import urlparse
 
 import discord
@@ -11,13 +12,13 @@ import lavalink
 
 from redbot.core import Config, commands
 from redbot.core.bot import Red
+from redbot.core.i18n import Translator
+from redbot.core.utils.chat_formatting import bold, box, escape
 
-from . import audio_dataclasses
-from .converters import _pass_config_to_converters
-from .playlists import _pass_config_to_playlist
+from .audio_dataclasses import Query
 
 __all__ = [
-    "pass_config_to_dependencies",
+    "_pass_config_to_utils",
     "track_limit",
     "queue_duration",
     "draw_time",
@@ -26,35 +27,45 @@ __all__ = [
     "clear_react",
     "match_yt_playlist",
     "remove_react",
-    "get_description",
+    "get_track_description",
     "track_creator",
     "time_convert",
     "url_check",
     "userlimit",
     "is_allowed",
+    "track_to_json",
     "rgetattr",
+    "humanize_scope",
     "CacheLevel",
+    "format_playlist_picker_data",
+    "get_track_description_unformatted",
     "Notifier",
+    "PlaylistScope",
 ]
-_re_time_converter = re.compile(r"(?:(\d+):)?([0-5]?[0-9]):([0-5][0-9])")
-re_yt_list_playlist = re.compile(
+_RE_TIME_CONVERTER = re.compile(r"(?:(\d+):)?([0-5]?[0-9]):([0-5][0-9])")
+_RE_YT_LIST_PLAYLIST = re.compile(
     r"^(https?://)?(www\.)?(youtube\.com|youtu\.?be)(/playlist\?).*(list=)(.*)(&|$)"
 )
 
-_config = None
-_bot = None
+if TYPE_CHECKING:
+    _config: Config
+    _bot: Red
+else:
+    _config = None
+    _bot = None
+
+_ = Translator("Audio", __file__)
 
 
-def pass_config_to_dependencies(config: Config, bot: Red, localtracks_folder: str):
-    global _bot, _config
-    _bot = bot
-    _config = config
-    _pass_config_to_playlist(config, bot)
-    _pass_config_to_converters(config, bot)
-    audio_dataclasses._pass_config_to_dataclasses(config, bot, localtracks_folder)
+def _pass_config_to_utils(config: Config, bot: Red) -> None:
+    global _config, _bot
+    if _config is None:
+        _config = config
+    if _bot is None:
+        _bot = bot
 
 
-def track_limit(track, maxlength):
+def track_limit(track, maxlength) -> bool:
     try:
         length = round(track.length / 1000)
     except AttributeError:
@@ -65,16 +76,33 @@ def track_limit(track, maxlength):
     return True
 
 
-async def is_allowed(guild: discord.Guild, query: str):
+async def is_allowed(guild: discord.Guild, query: str, query_obj: Query = None) -> bool:
+
     query = query.lower().strip()
-    whitelist = set(await _config.guild(guild).url_keyword_whitelist())
-    if whitelist:
-        return any(i in query for i in whitelist)
-    blacklist = set(await _config.guild(guild).url_keyword_blacklist())
-    return not any(i in query for i in blacklist)
+    if query_obj is not None:
+        query = query_obj.lavalink_query.replace("ytsearch:", "youtubesearch").replace(
+            "scsearch:", "soundcloudsearch"
+        )
+    global_whitelist = set(await _config.url_keyword_whitelist())
+    global_whitelist = [i.lower() for i in global_whitelist]
+    if global_whitelist:
+        return any(i in query for i in global_whitelist)
+    global_blacklist = set(await _config.url_keyword_blacklist())
+    global_blacklist = [i.lower() for i in global_blacklist]
+    if any(i in query for i in global_blacklist):
+        return False
+    if guild is not None:
+        whitelist = set(await _config.guild(guild).url_keyword_whitelist())
+        whitelist = [i.lower() for i in whitelist]
+        if whitelist:
+            return any(i in query for i in whitelist)
+        blacklist = set(await _config.guild(guild).url_keyword_blacklist())
+        blacklist = [i.lower() for i in blacklist]
+        return not any(i in query for i in blacklist)
+    return True
 
 
-async def queue_duration(ctx):
+async def queue_duration(ctx) -> int:
     player = lavalink.get_player(ctx.guild.id)
     duration = []
     for i in range(len(player.queue)):
@@ -94,7 +122,7 @@ async def queue_duration(ctx):
     return queue_total_duration
 
 
-async def draw_time(ctx):
+async def draw_time(ctx) -> str:
     saber1 = str(discord.utils.get(_bot.emojis, id=632678611148865548))
     saber2 = str(discord.utils.get(_bot.emojis, id=632678634280452106))
     saber3 = str(discord.utils.get(_bot.emojis, id=632678653116940298))
@@ -125,7 +153,7 @@ async def draw_time(ctx):
     return msg
 
 
-def dynamic_time(seconds):
+def dynamic_time(seconds) -> str:
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     d, h = divmod(h, 24)
@@ -143,7 +171,19 @@ def dynamic_time(seconds):
     return msg.format(d, h, m, s)
 
 
-def match_url(url):
+def format_playlist_picker_data(pid, pname, ptracks, pauthor, scope) -> str:
+    author = _bot.get_user(pauthor) or pauthor or _("Unknown")
+    line = _(
+        " - Name:   <{pname}>\n"
+        " - Scope:  < {scope} >\n"
+        " - ID:     < {pid} >\n"
+        " - Tracks: < {ptracks} >\n"
+        " - Author: < {author} >\n\n"
+    ).format(pname=pname, scope=humanize_scope(scope), pid=pid, ptracks=ptracks, author=author)
+    return box(line, lang="md")
+
+
+def match_url(url) -> bool:
     try:
         query_url = urlparse(url)
         return all([query_url.scheme, query_url.netloc, query_url.path])
@@ -151,18 +191,18 @@ def match_url(url):
         return False
 
 
-def match_yt_playlist(url):
-    if re_yt_list_playlist.match(url):
+def match_yt_playlist(url) -> bool:
+    if _RE_YT_LIST_PLAYLIST.match(url):
         return True
     return False
 
 
-async def remove_react(message, react_emoji, react_user):
+async def remove_react(message, react_emoji, react_user) -> None:
     with contextlib.suppress(discord.HTTPException):
         await message.remove_reaction(react_emoji, react_user)
 
 
-async def clear_react(bot: Red, message: discord.Message, emoji: dict = None):
+async def clear_react(bot: Red, message: discord.Message, emoji: MutableMapping = None) -> None:
     try:
         await message.clear_reactions()
     except discord.Forbidden:
@@ -176,29 +216,50 @@ async def clear_react(bot: Red, message: discord.Message, emoji: dict = None):
         return
 
 
-async def get_description(track):
-    if any(x in track.uri for x in [f"{os.sep}localtracks", f"localtracks{os.sep}"]):
-        local_track = audio_dataclasses.LocalPath(track.uri)
-        if track.title != "Unknown title":
-            return "**{} - {}**\n{}".format(
-                track.author, track.title, local_track.to_string_hidden()
-            )
+def get_track_description(track) -> Optional[str]:
+    if track and hasattr(track, "uri"):
+        query = Query.process_input(track.uri)
+        if query.is_local:
+            if track.title != "Unknown title":
+                return bold(escape(f"{track.author} - {track.title}", formatting=True)) + escape(
+                    f"\n{query.to_string_user()} ", formatting=True
+                )
+            else:
+                return escape(query.to_string_user(), formatting=True)
         else:
-            return local_track.to_string_hidden()
-    else:
-        return "**[{}]({})**".format(track.title, track.uri)
+            return bold(escape(f"[{track.title}]({track.uri}) ", formatting=True))
+    elif hasattr(track, "to_string_user") and track.is_local:
+        return escape(track.to_string_user() + " ", formatting=True)
 
 
-def track_creator(player, position=None, other_track=None):
+def get_track_description_unformatted(track) -> Optional[str]:
+    if track and hasattr(track, "uri"):
+        query = Query.process_input(track.uri)
+        if query.is_local:
+            if track.title != "Unknown title":
+                return escape(f"{track.author} - {track.title}", formatting=True)
+            else:
+                return escape(query.to_string_user(), formatting=True)
+        else:
+            return escape(f"{track.title}", formatting=True)
+    elif hasattr(track, "to_string_user") and track.is_local:
+        return escape(track.to_string_user() + " ", formatting=True)
+
+
+def track_creator(player, position=None, other_track=None) -> MutableMapping:
     if position == "np":
         queued_track = player.current
     elif position is None:
         queued_track = other_track
     else:
         queued_track = player.queue[position]
-    track_keys = queued_track._info.keys()
-    track_values = queued_track._info.values()
-    track_id = queued_track.track_identifier
+    return track_to_json(queued_track)
+
+
+def track_to_json(track: lavalink.Track) -> MutableMapping:
+    track_keys = track._info.keys()
+    track_values = track._info.values()
+    track_id = track.track_identifier
     track_info = {}
     for k, v in zip(track_keys, track_values):
         track_info[k] = v
@@ -210,8 +271,8 @@ def track_creator(player, position=None, other_track=None):
     return track_obj
 
 
-def time_convert(length):
-    match = re.compile(_re_time_converter).match(length)
+def time_convert(length) -> int:
+    match = _RE_TIME_CONVERTER.match(length)
     if match is not None:
         hr = int(match.group(1)) if match.group(1) else 0
         mn = int(match.group(2)) if match.group(2) else 0
@@ -225,7 +286,7 @@ def time_convert(length):
             return 0
 
 
-def url_check(url):
+def url_check(url) -> bool:
     valid_tld = [
         "youtube.com",
         "youtu.be",
@@ -245,7 +306,7 @@ def url_check(url):
     return True if url_domain in valid_tld else False
 
 
-def userlimit(channel):
+def userlimit(channel) -> bool:
     if channel.user_limit == 0 or channel.user_limit > len(channel.members) + 1:
         return False
     return True
@@ -396,7 +457,9 @@ class CacheLevel:
 
 
 class Notifier:
-    def __init__(self, ctx: commands.Context, message: discord.Message, updates: dict, **kwargs):
+    def __init__(
+        self, ctx: commands.Context, message: discord.Message, updates: MutableMapping, **kwargs
+    ):
         self.context = ctx
         self.message = message
         self.updates = updates
@@ -412,8 +475,8 @@ class Notifier:
         seconds_key: str = None,
         seconds: str = None,
     ):
-        """
-        This updates an existing message.
+        """This updates an existing message.
+
         Based on the message found in :variable:`Notifier.updates` as per the `key` param
         """
         if self.last_msg_time + self.cooldown > time.time() and not current == total:
@@ -445,3 +508,27 @@ class Notifier:
             self.last_msg_time = time.time()
         except discord.errors.NotFound:
             pass
+
+
+@unique
+class PlaylistScope(Enum):
+    GLOBAL = "GLOBALPLAYLIST"
+    GUILD = "GUILDPLAYLIST"
+    USER = "USERPLAYLIST"
+
+    def __str__(self):
+        return "{0}".format(self.value)
+
+    @staticmethod
+    def list():
+        return list(map(lambda c: c.value, PlaylistScope))
+
+
+def humanize_scope(scope, ctx=None, the=None):
+
+    if scope == PlaylistScope.GLOBAL.value:
+        return ctx or _("the ") if the else "" + _("Global")
+    elif scope == PlaylistScope.GUILD.value:
+        return ctx.name if ctx else _("the ") if the else "" + _("Server")
+    elif scope == PlaylistScope.USER.value:
+        return str(ctx) if ctx else _("the ") if the else "" + _("User")
