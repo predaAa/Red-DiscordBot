@@ -527,7 +527,11 @@ class Economy(commands.Cog):
         async with ctx.typing():
             async with self.session.get(base_url, headers=headers) as r:
                 if r.status != 200:
-                    return await ctx.send("The daily vote api is down, please try again later")
+                    print(r.status)
+                    if r.status == 404:
+                        pass
+                    else:
+                        return await ctx.send("The daily vote api is down, please try again later")
                 data = await r.json()  # You might want to check if the API is up also.
             if data["voted"] is False:
                 embed = discord.Embed(
