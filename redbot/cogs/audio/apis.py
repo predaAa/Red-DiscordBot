@@ -871,6 +871,7 @@ class MusicCache:
             if update:
                 val = None
             if val:
+                log.debug(f"Querying Local Database for {query}")
                 task = ("update", ("lavalink", {"query": query}))
                 self.append_task(ctx, *task)
                 valid_global_entry = False
@@ -894,6 +895,7 @@ class MusicCache:
                 ]:
                     valid_global_entry = True
                 if valid_global_entry:
+                    log.debug(f"Querying Global DB api for {query}")
                     results, called_api = results, False
         if valid_global_entry:
             pass
@@ -911,6 +913,7 @@ class MusicCache:
                 )
             valid_global_entry = False
         else:
+            log.debug(f"Querying Lavalink api for {query}")
             called_api = True
             results = None
             try:
