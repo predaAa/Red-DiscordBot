@@ -859,7 +859,7 @@ class MusicCache:
         val = None
         _raw_query = audio_dataclasses.Query.process_input(query)
         query = str(_raw_query)
-        valid_global_entry = True
+        valid_global_entry = False
         results = None
         globaldb_toggle = await _config.global_db_enabled()
         called_api = False
@@ -875,6 +875,7 @@ class MusicCache:
                 task = ("update", ("lavalink", {"query": query}))
                 self.append_task(ctx, *task)
                 valid_global_entry = False
+                called_api = False
         if (
             globaldb_toggle
             and not val
