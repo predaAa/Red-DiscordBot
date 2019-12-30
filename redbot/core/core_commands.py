@@ -10,12 +10,9 @@ import platform
 import getpass
 import pip
 import traceback
-import random
-from random import choice, sample
+from random import choice
 from collections import namedtuple
 from pathlib import Path
-from random import SystemRandom
-from string import ascii_letters, digits
 from typing import TYPE_CHECKING, Union, Tuple, List, Optional, Iterable, Sequence, Dict, Set
 
 import aiohttp
@@ -497,7 +494,8 @@ class Core(commands.Cog, CoreLogic):
             await ctx.send(_("No exception has occurred yet"))
 
     @commands.command()
-    async def invite(self, ctx: commands.Context):
+    @commands.check(CoreLogic._can_get_invite_url)
+    async def invite(self, ctx):
         """Show's Red's invite url"""
         try:
             await ctx.author.send(await self._invite_url())
@@ -1893,7 +1891,7 @@ class Core(commands.Cog, CoreLogic):
         async with ctx.bot._config.guild(ctx.guild).whitelist() as curr_list:
             if user_or_role.id in curr_list:
                 removed = True
-                curr_list.remove(obj.id)
+                curr_list.remove(user_or_role.id)
 
         if removed:
             if user:
@@ -1989,7 +1987,7 @@ class Core(commands.Cog, CoreLogic):
         async with ctx.bot._config.guild(ctx.guild).blacklist() as curr_list:
             if user_or_role.id in curr_list:
                 removed = True
-                curr_list.remove(obj.id)
+                curr_list.remove(user_or_role.id)
 
         if removed:
             if user:

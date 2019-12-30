@@ -8,7 +8,7 @@ import random
 import time
 import urllib.parse
 from collections import namedtuple
-from typing import Callable, List, Mapping, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Callable, List, MutableMapping, Optional, TYPE_CHECKING, Tuple, Union, NoReturn
 
 import aiohttp
 import discord
@@ -149,17 +149,19 @@ class SpotifyAPI:
     def __init__(self, bot: Red, session: aiohttp.ClientSession):
         self.bot = bot
         self.session = session
-        self.spotify_token = None
+        self.spotify_token: Optional[MutableMapping[str, Union[str, int]]] = None
         self.client_id = None
         self.client_secret = None
 
     @staticmethod
-    async def _check_token(token: Mapping):
+    async def _check_token(token: MutableMapping):
         now = int(time.time())
         return token["expires_at"] - now < 60
 
     @staticmethod
-    def _make_token_auth(client_id: Optional[str], client_secret: Optional[str]) -> Mapping:
+    def _make_token_auth(
+        client_id: Optional[str], client_secret: Optional[str]
+    ) -> MutableMapping[str, Union[str, int]]:
         if client_id is None:
             client_id = ""
         if client_secret is None:
@@ -169,8 +171,8 @@ class SpotifyAPI:
         return {"Authorization": "Basic %s" % auth_header.decode("ascii")}
 
     async def _make_get(
-        self, url: str, headers: Mapping = None, params: Mapping = None
-    ) -> Mapping:
+        self, url: str, headers: MutableMapping = None, params: MutableMapping = None
+    ) -> MutableMapping[str, str]:
         if params is None:
             params = {}
         async with self.session.request("GET", url, params=params, headers=headers) as r:
@@ -182,12 +184,12 @@ class SpotifyAPI:
                 )
             return await r.json()
 
-    async def _get_auth(self):
+    async def _get_auth(self) -> NoReturn:
         tokens = await self.bot.get_shared_api_tokens("spotify")
         self.client_id = tokens.get("client_id", "")
         self.client_secret = tokens.get("client_secret", "")
 
-    async def _request_token(self) -> Mapping:
+    async def _request_token(self) -> MutableMapping[str, Union[str, int]]:
         await self._get_auth()
 
         payload = {"grant_type": "client_credentials"}
@@ -211,7 +213,9 @@ class SpotifyAPI:
         log.debug("Created a new access token for Spotify: {0}".format(token))
         return self.spotify_token["access_token"]
 
-    async def post_call(self, url: str, payload: Mapping, headers: Mapping = None) -> Mapping:
+    async def post_call(
+        self, url: str, payload: MutableMapping, headers: MutableMapping = None
+    ) -> MutableMapping[str, Union[str, int]]:
         async with self.session.post(url, data=payload, headers=headers) as r:
             if r.status != 200:
                 log.debug(
@@ -221,13 +225,15 @@ class SpotifyAPI:
                 )
             return await r.json()
 
-    async def get_call(self, url: str, params: Mapping) -> Mapping:
+    async def get_call(
+        self, url: str, params: MutableMapping
+    ) -> MutableMapping[str, Union[str, int]]:
         token = await self._get_spotify_token()
         return await self._make_get(
             url, params=params, headers={"Authorization": "Bearer {0}".format(token)}
         )
 
-    async def get_categories(self) -> List[Mapping]:
+    async def get_categories(self) -> List[MutableMapping]:
         url = "https://api.spotify.com/v1/browse/categories"
         params = {}
         result = await self.get_call(url, params=params)
@@ -310,7 +316,7 @@ class MusicCache:
         self._session: aiohttp.ClientSession = session
         self.database = _database
 
-        self._tasks: Mapping = {}
+        self._tasks: MutableMapping = {}
         self._lock: asyncio.Lock = asyncio.Lock()
         self.config: Optional[Config] = None
 
@@ -327,7 +333,7 @@ class MusicCache:
         await self.audio_api.post_call(llresponse=llresponse, query=query)
 
     @staticmethod
-    def _spotify_format_call(qtype: str, key: str) -> Tuple[str, Mapping]:
+    def _spotify_format_call(qtype: str, key: str) -> Tuple[str, MutableMapping]:
         params = {}
         if qtype == "album":
             query = f"https://api.spotify.com/v1/albums/{key}/tracks"
@@ -338,7 +344,7 @@ class MusicCache:
         return query, params
 
     @staticmethod
-    def _get_spotify_track_info(track_data: Mapping) -> Tuple[str, ...]:
+    def _get_spotify_track_info(track_data: MutableMapping) -> Tuple[str, ...]:
         artist_name = track_data["artists"][0]["name"]
         track_name = track_data["name"]
         track_info = f"{track_name} {artist_name}"
@@ -453,9 +459,9 @@ class MusicCache:
         query_type: str,
         uri: str,
         recursive: Union[str, bool] = False,
-        params: Optional[Mapping] = None,
+        params: MutableMapping = None,
         notifier: Optional[Notifier] = None,
-    ) -> Union[Mapping, List[str]]:
+    ) -> Union[MutableMapping, List[str]]:
 
         if recursive is False:
             (call, params) = self._spotify_format_call(query_type, uri)
@@ -859,7 +865,7 @@ class MusicCache:
         val = None
         _raw_query = audio_dataclasses.Query.process_input(query)
         query = str(_raw_query)
-        valid_global_entry = True
+        valid_global_entry = False
         results = None
         globaldb_toggle = await _config.global_db_enabled()
         called_api = False
@@ -871,9 +877,11 @@ class MusicCache:
             if update:
                 val = None
             if val:
+                log.debug(f"Querying Local Database for {query}")
                 task = ("update", ("lavalink", {"query": query}))
                 self.append_task(ctx, *task)
                 valid_global_entry = False
+                called_api = False
         if (
             globaldb_toggle
             and not val
@@ -894,6 +902,7 @@ class MusicCache:
                 ]:
                     valid_global_entry = True
                 if valid_global_entry:
+                    log.debug(f"Querying Global DB api for {query}")
                     results, called_api = results, False
         if valid_global_entry:
             pass
@@ -911,6 +920,7 @@ class MusicCache:
                 )
             valid_global_entry = False
         else:
+            log.debug(f"Querying Lavalink api for {query}")
             called_api = True
             results = None
             try:

@@ -12,7 +12,7 @@ import traceback
 from collections import Counter, namedtuple
 from io import StringIO
 from pathlib import Path
-from typing import List, Optional, Tuple, Union, cast, TYPE_CHECKING
+from typing import List, Optional, Tuple, Union, cast, TYPE_CHECKING, MutableMapping, Mapping
 
 import aiohttp
 import discord
@@ -21,6 +21,7 @@ from discord.embeds import EmptyEmbed
 from fuzzywuzzy import process
 
 from redbot.core import Config, bank, checks, commands
+from redbot.core.bot import Red
 from redbot.core.data_manager import cog_data_path
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import bold, box, escape, humanize_number, inline, pagify
@@ -84,19 +85,19 @@ class Audio(commands.Cog):
 
     def __init__(self, bot):
         super().__init__()
-        self.bot = bot
-        self.config = Config.get_conf(self, 2711759130, force_registration=True)
-        self.skip_votes = {}
-        self.play_lock = {}
-        self._dj_status_cache = {}
-        self._dj_role_cache = {}
-        self.session = aiohttp.ClientSession()
-        self._connect_task = None
-        self._disconnect_task = None
-        self._cleaned_up = False
-        self._connection_aborted = False
+        self.bot: Red = bot
+        self.config: Config = Config.get_conf(self, 2711759130, force_registration=True)
+        self.skip_votes: MutableMapping[discord.Guild, List[discord.Member]] = {}
+        self.play_lock: MutableMapping[int, bool] = {}
+        self._dj_status_cache: MutableMapping[int, Optional[bool]] = {}
+        self._dj_role_cache: MutableMapping[int, Optional[int]] = {}
+        self.session: aiohttp.ClientSession = aiohttp.ClientSession()
+        self._connect_task: Optional[asyncio.Task] = None
+        self._disconnect_task: Optional[asyncio.Task] = None
+        self._cleaned_up: bool = False
+        self._connection_aborted: bool = False
         self._manager: Optional[ServerManager] = None
-        default_global = dict(
+        default_global: Mapping = dict(
             schema_version=1,
             cache_level=0,
             cache_age=365,
@@ -111,7 +112,7 @@ class Audio(commands.Cog):
             **self._default_lavalink_settings,
         )
 
-        default_guild = dict(
+        default_guild: Mapping = dict(
             auto_play=False,
             autoplaylist=dict(enabled=False, id=None, name=None, scope=None),
             disconnect=False,
@@ -136,7 +137,7 @@ class Audio(commands.Cog):
             url_keyword_blacklist=[],
             url_keyword_whitelist=[],
         )
-        _playlist = dict(id=None, author=None, name=None, playlist_url=None, tracks=[])
+        _playlist: Mapping = dict(id=None, author=None, name=None, playlist_url=None, tracks=[])
         self.config.init_custom("EQUALIZER", 1)
         self.config.register_custom("EQUALIZER", eq_bands=[], eq_presets={})
         self.config.init_custom(PlaylistScope.GLOBAL.value, 1)
@@ -147,21 +148,16 @@ class Audio(commands.Cog):
         self.config.register_custom(PlaylistScope.USER.value, **_playlist)
         self.config.register_guild(**default_guild)
         self.config.register_global(**default_global)
-        if TYPE_CHECKING:
-            self.music_cache: MusicCache
-        else:
-            self.music_cache = None
-        self._error_counter = Counter()
-        self._error_timer = {}
-        self._disconnected_players = {}
-        self.play_lock = {}
+        self.music_cache: Optional[MusicCache] = None
+        self._error_counter: Counter = Counter()
+        self._error_timer: MutableMapping[int, int] = {}
+        self._disconnected_players: MutableMapping[int, bool] = {}
 
-        self._manager: Optional[ServerManager] = None
         # These has to be a task since this requires the bot to be ready
         # If it waits for ready in startup, we cause a deadlock during initial load
         # as initial load happens before the bot can ever be ready.
-        self._init_task = self.bot.loop.create_task(self.initialize())
-        self._ready_event = asyncio.Event()
+        self._init_task: asyncio.Task = self.bot.loop.create_task(self.initialize())
+        self._ready_event: asyncio.Event = asyncio.Event()
 
     async def cog_before_invoke(self, ctx: commands.Context):
         await self._ready_event.wait()
@@ -587,7 +583,8 @@ class Audio(commands.Cog):
                         )
                     else:
                         embed = discord.Embed(
-                            title=_("Track Error"), description="{}\n{}".format(extra.replace("\n", ""), description)
+                            title=_("Track Error"),
+                            description="{}\n{}".format(extra.replace("\n", ""), description),
                         )
                     await message_channel.send(embed=embed)
             await player.skip()
@@ -2410,7 +2407,7 @@ class Audio(commands.Cog):
         async def _local_folder_menu(
             ctx: commands.Context,
             pages: list,
-            controls: dict,
+            controls: MutableMapping,
             message: discord.Message,
             page: int,
             timeout: float,
@@ -3056,7 +3053,7 @@ class Audio(commands.Cog):
         async def _category_search_menu(
             ctx: commands.Context,
             pages: list,
-            controls: dict,
+            controls: MutableMapping,
             message: discord.Message,
             page: int,
             timeout: float,
@@ -3071,7 +3068,7 @@ class Audio(commands.Cog):
         async def _playlist_search_menu(
             ctx: commands.Context,
             pages: list,
-            controls: dict,
+            controls: MutableMapping,
             message: discord.Message,
             page: int,
             timeout: float,
@@ -3806,7 +3803,7 @@ class Audio(commands.Cog):
     async def _get_correct_playlist_id(
         self,
         context: commands.Context,
-        matches: dict,
+        matches: MutableMapping,
         scope: str,
         author: discord.User,
         guild: discord.Guild,
@@ -3840,7 +3837,7 @@ class Audio(commands.Cog):
         """
         correct_scope_matches: List[Playlist]
         original_input = matches.get("arg")
-        correct_scope_matches_temp: dict = matches.get(scope)
+        correct_scope_matches_temp: MutableMapping = matches.get(scope)
         guild_to_query = guild.id
         user_to_query = author.id
         if not correct_scope_matches_temp:
@@ -6023,7 +6020,7 @@ class Audio(commands.Cog):
         async def _queue_menu(
             ctx: commands.Context,
             pages: list,
-            controls: dict,
+            controls: MutableMapping,
             message: discord.Message,
             page: int,
             timeout: float,
@@ -6623,7 +6620,7 @@ class Audio(commands.Cog):
         async def _search_menu(
             ctx: commands.Context,
             pages: list,
-            controls: dict,
+            controls: MutableMapping,
             message: discord.Message,
             page: int,
             timeout: float,
@@ -7710,7 +7707,7 @@ class Audio(commands.Cog):
         else:
             return False
 
-    async def _clear_react(self, message: discord.Message, emoji: dict = None):
+    async def _clear_react(self, message: discord.Message, emoji: MutableMapping = None):
         """Non blocking version of clear_react."""
         return self.bot.loop.create_task(clear_react(self.bot, message, emoji))
 
