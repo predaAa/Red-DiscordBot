@@ -10,12 +10,9 @@ import platform
 import getpass
 import pip
 import traceback
-import random
-from random import choice, sample
+from random import choice
 from collections import namedtuple
 from pathlib import Path
-from random import SystemRandom
-from string import ascii_letters, digits
 from typing import TYPE_CHECKING, Union, Tuple, List, Optional, Iterable, Sequence, Dict, Set
 
 import aiohttp

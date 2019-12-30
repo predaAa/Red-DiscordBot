@@ -269,7 +269,7 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
                 return False
 
         if guild:
-            if guild.owner_id == who.id:
+            if getattr(guild, "owner_id", None) == who.id:
                 return True
 
             # The delayed expansion of ids to check saves time in the DM case.
