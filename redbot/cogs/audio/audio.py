@@ -645,6 +645,13 @@ class Audio(commands.Cog):
             log.debug(f"Query is not allowed in {guild} ({guild.id})")
             return
         track.extras["autoplay"] = is_autoplay
+        track.extras.update(
+            {
+                "enqueue_time": int(time.time()),
+                "vc":           player.channel.id,
+                "requester":    player.channel.guild.me.id,
+            }
+        )
         player.add(player.channel.guild.me, track)
         self.bot.dispatch(
             "red_audio_track_auto_play", player.channel.guild, track, player.channel.guild.me
@@ -2955,7 +2962,7 @@ class Audio(commands.Cog):
                     {
                         "enqueue_time": int(time.time()),
                         "vc": player.channel.id,
-                        "requester": single_track.requester.id,
+                        "requester": ctx.author.id,
                     }
                 )
                 player.queue.insert(0, single_track)
@@ -2978,7 +2985,7 @@ class Audio(commands.Cog):
                 {
                     "enqueue_time": int(time.time()),
                     "vc": player.channel.id,
-                    "requester": single_track.requester.id,
+                    "requester": ctx.author.id,
                 }
             )
             player.queue.insert(0, single_track)
@@ -3522,7 +3529,7 @@ class Audio(commands.Cog):
                             {
                                 "enqueue_time": int(time.time()),
                                 "vc": player.channel.id,
-                                "requester": track.requester.id,
+                                "requester": ctx.author.id,
                             }
                         )
                         player.add(ctx.author, track)
@@ -3536,7 +3543,7 @@ class Audio(commands.Cog):
                         {
                             "enqueue_time": int(time.time()),
                             "vc": player.channel.id,
-                            "requester": track.requester.id,
+                            "requester": ctx.author.id,
                         }
                     )
                     player.add(ctx.author, track)
@@ -3609,7 +3616,7 @@ class Audio(commands.Cog):
                             {
                                 "enqueue_time": int(time.time()),
                                 "vc": player.channel.id,
-                                "requester": single_track.requester.id,
+                                "requester": ctx.author.id,
                             }
                         )
                         player.add(ctx.author, single_track)
@@ -3629,7 +3636,7 @@ class Audio(commands.Cog):
                         {
                             "enqueue_time": int(time.time()),
                             "vc": player.channel.id,
-                            "requester": single_track.requester.id,
+                            "requester": ctx.author.id,
                         }
                     )
                     player.add(ctx.author, single_track)
@@ -6895,7 +6902,7 @@ class Audio(commands.Cog):
                     {
                         "enqueue_time": int(time.time()),
                         "vc": player.channel.id,
-                        "requester": ctx.authorid,
+                        "requester": ctx.author.id,
                     }
                 )
                 player.add(ctx.author, search_choice)
@@ -6910,7 +6917,7 @@ class Audio(commands.Cog):
                 {
                     "enqueue_time": int(time.time()),
                     "vc": player.channel.id,
-                    "requester": ctx.authorid,
+                    "requester": ctx.author.id,
                 }
             )
             player.add(ctx.author, search_choice)
@@ -7992,7 +7999,7 @@ class Audio(commands.Cog):
         self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
     ):
         self.music_cache.persist_queue.enqueued(
-            guild_id=guild.id, room_id=track.extras["vd"], track=track
+            guild_id=guild.id, room_id=track.extras["vc"], track=track
         )
 
     @commands.Cog.listener()
@@ -8000,7 +8007,7 @@ class Audio(commands.Cog):
         self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
     ):
         self.music_cache.persist_queue.played(
-            guild_id=guild.id, unix_time=track.extras["enqueue_time"]
+            guild_id=guild.id, track_id=track.track_identifier
         )
 
     @commands.Cog.listener()
@@ -8035,8 +8042,8 @@ class Audio(commands.Cog):
                         player.store("connect", datetime.datetime.utcnow())
                         break
                     except IndexError:
-                        await asyncio.sleep(10)
-                        tries += 10
+                        await asyncio.sleep(5)
+                        tries += 5
             if tries >= 121 or guild is None:
                 self.music_cache.persist_queue.drop(guild_id)
                 return
@@ -8051,12 +8058,14 @@ class Audio(commands.Cog):
             if player.volume != volume:
                 await player.set_volume(volume)
             for track in track_data:
+                track = track.track_object
                 player.add(
-                    guild.get_member(track.track_object.extras.get("requester")) or guild.me,
-                    track.track_object,
+                    guild.get_member(track.extras.get("requester")) or guild.me,
+                    track,
                 )
             player.maybe_shuffle()
             await player.play()
+            # self.music_cache.persist_queue.drop(guild_id)
 
     def cog_unload(self):
         if not self._cleaned_up:

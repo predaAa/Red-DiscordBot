@@ -345,11 +345,11 @@ class QueueInterface:
     def fetch(self) -> List[QueueFetchResult]:
         output = self.cursor.execute(PERSIST_QUEUE_FETCH_ALL).fetchall() or []
 
-        return [PlaylistFetchResult(*row) for row in output] if output else []
+        return [QueueFetchResult(*row) for row in output] if output else []
 
-    def played(self, guild_id: int, unix_time: int):
+    def played(self, guild_id: int, track_id: str):
         return self.cursor.execute(
-            PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "time": unix_time})
+            PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "track_id": track_id})
         )
 
     def delete_scheduled(self):
@@ -360,6 +360,9 @@ class QueueInterface:
 
     def enqueued(self, guild_id: int, room_id: int, track: lavalink.Track):
         enqueue_time = track.extras.get("enqueue_time", 0)
+        if enqueue_time == 0:
+            track.extras["enqueue_time"] = int(time.time())
+        track_identifier = track.track_identifier
         track = track_to_json(track)
         self.cursor.execute(
             PERSIST_QUEUE_UPSERT,
@@ -370,6 +373,7 @@ class QueueInterface:
                     "played": False,
                     "time": enqueue_time,
                     "track": json.dumps(track),
+                    "track_id": track_identifier
                 }
             ),
         )

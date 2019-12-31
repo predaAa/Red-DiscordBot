@@ -611,6 +611,13 @@ class MusicCache:
                     if guild_data["maxlength"] > 0:
                         if track_limit(single_track, guild_data["maxlength"]):
                             enqueued_tracks += 1
+                            single_track.extras.update(
+                                {
+                                    "enqueue_time": int(time.time()),
+                                    "vc":           player.channel.id,
+                                    "requester":    ctx.author.id,
+                                }
+                            )
                             player.add(ctx.author, single_track)
                             self.bot.dispatch(
                                 "red_audio_track_enqueue",
@@ -620,6 +627,13 @@ class MusicCache:
                             )
                     else:
                         enqueued_tracks += 1
+                        single_track.extras.update(
+                            {
+                                "enqueue_time": int(time.time()),
+                                "vc":           player.channel.id,
+                                "requester":    ctx.author.id,
+                            }
+                        )
                         player.add(ctx.author, single_track)
                         self.bot.dispatch(
                             "red_audio_track_enqueue",
@@ -913,6 +927,13 @@ class MusicCache:
                 valid = True
 
             track.extras["autoplay"] = True
+            track.extras.update(
+                {
+                    "enqueue_time": int(time.time()),
+                    "vc":           player.channel.id,
+                    "requester":    player.channel.guild.me.id,
+                }
+            )
             player.add(player.channel.guild.me, track)
             self.bot.dispatch(
                 "red_audio_track_auto_play", player.channel.guild, track, player.channel.guild.me
