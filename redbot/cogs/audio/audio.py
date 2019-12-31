@@ -6986,7 +6986,7 @@ class Audio(commands.Cog):
                 search_choice = tracks[0 + (page * 5)]
         except IndexError:
             search_choice = tracks[-1]
-        if hasattr(search_choice, "uri"):
+        if getattr(search_choice, "uri", None):
             description = get_track_description(search_choice)
         else:
             search_choice = audio_dataclasses.Query.process_input(search_choice)
