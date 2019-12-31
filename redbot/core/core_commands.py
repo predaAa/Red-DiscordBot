@@ -1313,14 +1313,14 @@ class Core(commands.Cog, CoreLogic):
 
         This setting only applies to embedded help.
 
-        Please note that setting a relitavely small character limit may
-        mean some pages will exceed this limit. This is because categories
-        are never spread across multiple pages in the help message.
+        The default value is 1000 characters. The minimum value is 500.
+        The maximum is based on the lower of what you provide and what discord allows.
 
-        The default value is 1000 characters.
+        Please note that setting a relatively small character limit may
+        mean some pages will exceed this limit.
         """
-        if limit <= 0:
-            await ctx.send(_("You must give a positive value!"))
+        if limit < 500:
+            await ctx.send(_("You must give a value of at least 500 characters."))
             return
 
         await ctx.bot._config.help.page_char_limit.set(limit)
@@ -1705,6 +1705,10 @@ class Core(commands.Cog, CoreLogic):
         """
         curr_list = await ctx.bot._config.whitelist()
 
+        if not curr_list:
+            await ctx.send("Whitelist is empty.")
+            return
+
         msg = _("Whitelisted Users:")
         for user in curr_list:
             msg += "\n\t- {}".format(user)
@@ -1767,6 +1771,10 @@ class Core(commands.Cog, CoreLogic):
         Lists blacklisted users.
         """
         curr_list = await ctx.bot._config.blacklist()
+
+        if not curr_list:
+            await ctx.send("Blacklist is empty.")
+            return
 
         msg = _("Blacklisted Users:")
         for user in curr_list:
@@ -1838,6 +1846,10 @@ class Core(commands.Cog, CoreLogic):
         """
         curr_list = await ctx.bot._config.guild(ctx.guild).whitelist()
 
+        if not curr_list:
+            await ctx.send("Local whitelist is empty.")
+            return
+
         msg = _("Whitelisted Users and roles:")
         for obj in curr_list:
             msg += "\n\t- {}".format(obj)
@@ -1903,9 +1915,16 @@ class Core(commands.Cog, CoreLogic):
             user_or_role = discord.Object(id=user_or_role)
             user = True
 
-        if user and await ctx.bot.is_owner(user_or_role):
-            await ctx.send(_("You cannot blacklist an owner!"))
-            return
+        if user:
+            if user_or_role.id == ctx.author.id:
+                await ctx.send(_("You cannot blacklist yourself!"))
+                return
+            if user_or_role.id == ctx.guild.owner_id and not await ctx.bot.is_owner(ctx.author):
+                await ctx.send(_("You cannot blacklist the guild owner!"))
+                return
+            if await ctx.bot.is_owner(user_or_role):
+                await ctx.send(_("You cannot blacklist a bot owner!"))
+                return
 
         async with ctx.bot._config.guild(ctx.guild).blacklist() as curr_list:
             if user_or_role.id not in curr_list:
@@ -1922,6 +1941,10 @@ class Core(commands.Cog, CoreLogic):
         Lists blacklisted users and roles.
         """
         curr_list = await ctx.bot._config.guild(ctx.guild).blacklist()
+
+        if not curr_list:
+            await ctx.send("Local blacklist is empty.")
+            return
 
         msg = _("Blacklisted Users and Roles:")
         for obj in curr_list:
