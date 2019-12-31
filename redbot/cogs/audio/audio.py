@@ -8217,6 +8217,7 @@ class Audio(commands.Cog):
         self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
     ):
         self.music_cache.persist_queue.drop(guild.id)
+        self.music_cache.database.clean_up_old_entries()
 
     async def restore_players(self):
         tries = 0
