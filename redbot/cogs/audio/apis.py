@@ -876,7 +876,7 @@ class MusicCache:
                 (val, update) = await self.database.fetch_one("lavalink", "data", {"query": query})
             if update:
                 val = None
-            if val:
+            if val and not isinstance(val, str):
                 log.debug(f"Querying Local Database for {query}")
                 task = ("update", ("lavalink", {"query": query}))
                 self.append_task(ctx, *task)

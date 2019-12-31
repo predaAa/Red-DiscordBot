@@ -206,7 +206,6 @@ class Audio(commands.Cog):
             dat = get_playlist_database()
             if dat:
                 dat.delete_scheduled()
-            self.music_cache.persist_queue.delete_scheduled()
             self._restart_connect()
             self._disconnect_task = self.bot.loop.create_task(self.disconnect_timer())
             lavalink.register_event_listener(self.event_handler)
