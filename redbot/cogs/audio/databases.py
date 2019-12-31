@@ -227,6 +227,12 @@ class CacheInterface:
                     log.debug(f"Failed to completed random fetch from database", exc_info=exc)
         return CacheLastFetchResult(*row)
 
+    async def fetch_all_for_global(self) -> List[CacheGetAllLavalink]:
+        return [
+            CacheGetAllLavalink(*row)
+            for row in self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL).fetchall()
+        ]
+
 
 class PlaylistInterface:
     def __init__(self):
