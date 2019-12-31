@@ -57,6 +57,7 @@ from .playlists import (
     get_all_playlist,
     get_all_playlist_for_migration23,
     get_playlist,
+    get_playlist_database,
 )
 from .utils import *
 
@@ -101,6 +102,8 @@ class Audio(commands.Cog):
             schema_version=1,
             cache_level=0,
             cache_age=365,
+            global_db_enabled=False,
+            global_db_get_timeout=0.5,
             status=False,
             use_external_lavalink=False,
             restrict=True,
@@ -200,9 +203,9 @@ class Audio(commands.Cog):
             await self._migrate_config(
                 from_version=await self.config.schema_version(), to_version=_SCHEMA_VERSION
             )
-            import redbot.cogs.audio.playlists
-
-            redbot.cogs.audio.playlists.database.delete_scheduled()
+            dat = get_playlist_database()
+            if dat:
+                dat.delete_scheduled()
             self._restart_connect()
             self._disconnect_task = self.bot.loop.create_task(self.disconnect_timer())
             lavalink.register_event_listener(self.event_handler)
@@ -652,6 +655,61 @@ class Audio(commands.Cog):
     @commands.bot_has_permissions(embed_links=True)
     async def audioset(self, ctx: commands.Context):
         """Music configuration options."""
+
+    @checks.is_owner()
+    @audioset.group(name="audiodb")
+    async def _audiodb(self, ctx: commands.Context):
+        """Change audiodb settings."""
+
+    @_audiodb.command(name="toggle")
+    async def _audiodb_toggle(self, ctx: commands.Context):
+        """Toggle the server settings.
+
+        Default is ON
+        """
+        state = await self.config.global_db_enabled()
+        await self.config.global_db_enabled.set(not state)
+        await ctx.send(
+            _("Global DB is {status}").format(status=_("enabled") if not state else _("disabled"))
+        )
+
+    @_audiodb.command(name="timeout")
+    async def _audiodb_timeout(self, ctx: commands.Context, timeout: Union[float, int]):
+        """Set GET request timeout.
+
+        Example: 0.1 = 100ms 1 = 1 second
+        """
+
+        await self.config.global_db_get_timeout.set(timeout)
+        await ctx.send(_(f"Request timeout set to {timeout} second(s)"))
+
+    @_audiodb.command(name="contribute")
+    async def contribute(self, ctx: commands.Context):
+        """Send your local DB upstream."""
+        tokens = await self.bot.get_shared_api_tokens("audiodb")
+        api_key = tokens.get("api_key", None)
+        if api_key is None:
+            return await ctx.send(
+                _(
+                    "Hey! Thanks for showing interest into contributing, "
+                    "currently you dont have access to this, "
+                    "if you wish to contribute please DM Draper#6666"
+                )
+            )
+        db_entries = await self.music_cache.fetch_all_contribute()
+        info = await ctx.send(
+            _(
+                "Sending {entries} entries to the global DB. "
+                "are you sure about this (It may take a very long time...)?"
+            ).format(entries=len(db_entries))
+        )
+        start_adding_reactions(info, ReactionPredicate.YES_OR_NO_EMOJIS)
+        pred = ReactionPredicate.yes_or_no(info, ctx.author)
+        await ctx.bot.wait_for("reaction_add", check=pred)
+        if not pred.result:
+            return await ctx.send(_("Cancelled!"))
+
+        await self.music_cache._api_contributer(ctx, db_entries)
 
     @audioset.command()
     @checks.mod_or_permissions(manage_messages=True)
@@ -1563,19 +1621,22 @@ class Audio(commands.Cog):
             ).format(pname=pname, pid=pid, pscope=pscope)
 
         if is_owner:
+            global_db = await self.config.global_db_enabled()
             msg += (
                 "\n---"
                 + _("Cache Settings")
                 + "---        \n"
-                + _("Max age:          [{max_age}]\n")
-                + _("Spotify cache:    [{spotify_status}]\n")
-                + _("Youtube cache:    [{youtube_status}]\n")
-                + _("Lavalink cache:   [{lavalink_status}]\n")
+                + _("Max age:                [{max_age}]\n")
+                + _("Local Spotify cache:    [{spotify_status}]\n")
+                + _("Local Youtube cache:    [{youtube_status}]\n")
+                + _("Local Lavalink cache:   [{lavalink_status}]\n")
+                + _("Global cache status:    [{global_cache}]\n")
             ).format(
                 max_age=str(await self.config.cache_age()) + " " + _("days"),
                 spotify_status=_("Enabled") if has_spotify_cache else _("Disabled"),
                 youtube_status=_("Enabled") if has_youtube_cache else _("Disabled"),
                 lavalink_status=_("Enabled") if has_lavalink_cache else _("Disabled"),
+                global_cache=_("Enabled") if global_db else _("Disabled"),
             )
 
         msg += _(
@@ -6480,8 +6541,8 @@ class Audio(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @commands.bot_has_permissions(embed_links=True)
-    async def remove(self, ctx: commands.Context, index: int):
-        """Remove a specific track number from the queue."""
+    async def remove(self, ctx: commands.Context, index_or_url: Union[int, str]):
+        """Remove a specific track number or url from the queue."""
         dj_enabled = self._dj_status_cache.setdefault(
             ctx.guild.id, await self.config.guild(ctx.guild).dj_enabled()
         )
@@ -6505,20 +6566,47 @@ class Audio(commands.Cog):
                 title=_("Unable To Modify Queue"),
                 description=_("You must be in the voice channel to manage the queue."),
             )
-        if index > len(player.queue) or index < 1:
-            return await self._embed_msg(
+        if isinstance(index_or_url, int):
+            if index_or_url > len(player.queue) or index_or_url < 1:
+                return await self._embed_msg(
+                    ctx,
+                    title=_("Unable To Modify Queue"),
+                    description=_(
+                        "Song number must be greater than 1 and within the queue limit."
+                    ),
+                )
+            index_or_url -= 1
+            removed = player.queue.pop(index_or_url)
+            removed_title = get_track_description(removed)
+            await self._embed_msg(
                 ctx,
-                title=_("Unable To Modify Queue"),
-                description=_("Song number must be greater than 1 and within the queue limit."),
+                title=_("Removed track from queue"),
+                description=_("Removed {track} from the queue.").format(track=removed_title),
             )
-        index -= 1
-        removed = player.queue.pop(index)
-        removed_title = get_track_description(removed)
-        await self._embed_msg(
-            ctx,
-            title=_("Removed track from queue"),
-            description=_("Removed {track} from the queue.").format(track=removed_title),
-        )
+        else:
+            clean_tracks = []
+            removed_tracks = 0
+            for track in player.queue:
+                if track.uri != index_or_url:
+                    clean_tracks.append(track)
+                else:
+                    removed_tracks += 1
+            player.queue = clean_tracks
+            if removed_tracks == 0:
+                await self._embed_msg(
+                    ctx,
+                    title=_("Unable To Modify Queue"),
+                    description=_("Removed 0 tracks, nothing matches the URL provided."),
+                )
+            else:
+                await self._embed_msg(
+                    ctx,
+                    title=_("Removed track from queue"),
+                    description=_(
+                        "Removed {removed_tracks} tracks from queue "
+                        "which matched the URL provided."
+                    ).format(removed_tracks=removed_tracks),
+                )
 
     @commands.command()
     @commands.guild_only()
@@ -7880,6 +7968,51 @@ class Audio(commands.Cog):
             return False
         except KeyError:
             return False
+
+    @commands.Cog.listener()
+    async def on_red_audio_track_start(
+        self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
+    ):
+        scope = PlaylistScope.GUILD.value
+        today = datetime.date.today()
+        midnight = datetime.datetime.combine(today, datetime.datetime.min.time())
+        name = f"Daily playlist - {today}"
+        today_id = int(time.mktime(today.timetuple()))
+        track = track_to_json(track)
+
+        try:
+            playlist = await get_playlist(
+                playlist_number=today_id,
+                scope=PlaylistScope.GUILD.value,
+                bot=self.bot,
+                guild=guild,
+                author=self.bot.user,
+            )
+        except RuntimeError:
+            playlist = None
+
+        if playlist:
+            tracks = playlist.tracks
+            tracks.append(track)
+            await playlist.edit({"tracks": tracks})
+        else:
+            playlist = Playlist(
+                bot=self.bot,
+                scope=scope,
+                author=self.bot.user.id,
+                playlist_id=today_id,
+                name=name,
+                playlist_url=None,
+                tracks=[track],
+                guild=guild,
+            )
+            await playlist.save()
+        with contextlib.suppress(Exception):
+            too_old = midnight - datetime.timedelta(days=8)
+            too_old_id = int(time.mktime(too_old.timetuple()))
+            await delete_playlist(
+                scope=scope, playlist_id=too_old_id, guild=guild, author=self.bot.user
+            )
 
     @commands.Cog.listener()
     async def on_voice_state_update(

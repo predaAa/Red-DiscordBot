@@ -203,6 +203,12 @@ class CacheInterface:
             for row in self.database.execute(sql_query, values).fetchall()
         ]
 
+    async def fetch_all_for_global(self) -> List[CacheGetAllLavalink]:
+        return [
+            CacheGetAllLavalink(*row)
+            for row in self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL).fetchall()
+        ]
+
 
 class PlaylistInterface:
     def __init__(self):
