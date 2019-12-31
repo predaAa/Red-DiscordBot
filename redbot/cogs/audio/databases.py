@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, TYPE_CHECKING, Tuple, Union, MutableMapping, Mapping
 
 import apsw
+import lavalink
 
 from redbot.core import Config
 from redbot.core.bot import Red
@@ -14,7 +15,7 @@ from redbot.core.data_manager import cog_data_path
 
 from .errors import InvalidTableError
 from .sql_statements import *
-from .utils import PlaylistScope
+from .utils import PlaylistScope, track_to_json
 
 log = logging.getLogger("red.audio.database")
 
@@ -75,6 +76,20 @@ class PlaylistFetchResult:
     def __post_init__(self):
         if isinstance(self.tracks, str):
             self.tracks = json.loads(self.tracks)
+
+
+@dataclass
+class QueueFetchResult:
+    guild_id: int
+    room_id: int
+    track: dict = field(default_factory=lambda: {})
+    track_object: lavalink.Track = None
+
+    def __post_init__(self):
+        if isinstance(self.track, str):
+            self.track = json.loads(self.track)
+        if self.track:
+            self.track_object = lavalink.Track(self.track)
 
 
 @dataclass
@@ -203,6 +218,17 @@ class CacheInterface:
             for row in self.database.execute(sql_query, values).fetchall()
         ]
 
+    async def fetch_random(
+        self, table: str, query: str, values: Dict[str, Union[str, int]]
+    ) -> CacheLastFetchResult:
+        table = _PARSER.get(table, {})
+        sql_query = table.get(query, {}).get("played")
+        if not table:
+            raise InvalidTableError(f"{table} is not a valid table in the database.")
+
+        row = self.database.execute(sql_query, values).fetchone()
+        return CacheLastFetchResult(*row)
+
     async def fetch_all_for_global(self) -> List[CacheGetAllLavalink]:
         return [
             CacheGetAllLavalink(*row)
@@ -322,6 +348,57 @@ class PlaylistInterface:
                     "author_id": int(author_id),
                     "playlist_url": playlist_url,
                     "tracks": json.dumps(tracks),
+                }
+            ),
+        )
+
+
+class QueueInterface:
+    def __init__(self):
+        self.cursor = database_connection.cursor()
+        self.cursor.execute(PRAGMA_SET_temp_store)
+        self.cursor.execute(PRAGMA_SET_journal_mode)
+        self.cursor.execute(PRAGMA_SET_read_uncommitted)
+        self.cursor.execute(PERSIST_QUEUE_CREATE_TABLE)
+        self.cursor.execute(PERSIST_QUEUE_CREATE_INDEX)
+
+    @staticmethod
+    def close():
+        with contextlib.suppress(Exception):
+            database_connection.close()
+
+    def fetch(self) -> List[QueueFetchResult]:
+        output = self.cursor.execute(PERSIST_QUEUE_FETCH_ALL).fetchall() or []
+
+        return [QueueFetchResult(*row) for row in output] if output else []
+
+    def played(self, guild_id: int, track_id: str):
+        return self.cursor.execute(
+            PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "track_id": track_id})
+        )
+
+    def delete_scheduled(self):
+        return self.cursor.execute(PERSIST_QUEUE_DELETE_SCHEDULED)
+
+    def drop(self, guild_id: int):
+        return self.cursor.execute(PERSIST_QUEUE_BULK_PLAYED, ({"guild_id": guild_id}))
+
+    def enqueued(self, guild_id: int, room_id: int, track: lavalink.Track):
+        enqueue_time = track.extras.get("enqueue_time", 0)
+        if enqueue_time == 0:
+            track.extras["enqueue_time"] = int(time.time())
+        track_identifier = track.track_identifier
+        track = track_to_json(track)
+        self.cursor.execute(
+            PERSIST_QUEUE_UPSERT,
+            (
+                {
+                    "guild_id": int(guild_id),
+                    "room_id": int(room_id),
+                    "played": False,
+                    "time": enqueue_time,
+                    "track": json.dumps(track),
+                    "track_id": track_identifier,
                 }
             ),
         )
