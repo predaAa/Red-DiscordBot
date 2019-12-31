@@ -387,7 +387,7 @@ class QueueInterface:
                     "played": False,
                     "time": enqueue_time,
                     "track": json.dumps(track),
-                    "track_id": track_identifier
+                    "track_id": track_identifier,
                 }
             ),
         )

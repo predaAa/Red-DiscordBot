@@ -34,7 +34,7 @@ __all__ = [
     "get_all_playlist_for_migration23",
     "database",
     "get_all_playlist_converter",
-    "get_playlist_database"
+    "get_playlist_database",
 ]
 
 FakePlaylist = namedtuple("Playlist", "author scope")

@@ -649,8 +649,8 @@ class Audio(commands.Cog):
         track.extras.update(
             {
                 "enqueue_time": int(time.time()),
-                "vc":           player.channel.id,
-                "requester":    player.channel.guild.me.id,
+                "vc": player.channel.id,
+                "requester": player.channel.guild.me.id,
             }
         )
         player.add(player.channel.guild.me, track)
@@ -8137,9 +8137,7 @@ class Audio(commands.Cog):
     async def on_red_audio_track_start(
         self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
     ):
-        self.music_cache.persist_queue.played(
-            guild_id=guild.id, track_id=track.track_identifier
-        )
+        self.music_cache.persist_queue.played(guild_id=guild.id, track_id=track.track_identifier)
 
     @commands.Cog.listener()
     async def on_red_audio_queue_end(
@@ -8190,10 +8188,7 @@ class Audio(commands.Cog):
                 await player.set_volume(volume)
             for track in track_data:
                 track = track.track_object
-                player.add(
-                    guild.get_member(track.extras.get("requester")) or guild.me,
-                    track,
-                )
+                player.add(guild.get_member(track.extras.get("requester")) or guild.me, track)
             player.maybe_shuffle()
             await player.play()
             # self.music_cache.persist_queue.drop(guild_id)
