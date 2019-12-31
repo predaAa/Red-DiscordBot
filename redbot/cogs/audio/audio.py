@@ -93,6 +93,7 @@ class Audio(commands.Cog):
         self.play_lock: MutableMapping[int, bool] = {}
         self._dj_status_cache: MutableMapping[int, Optional[bool]] = {}
         self._dj_role_cache: MutableMapping[int, Optional[int]] = {}
+        self._persist_queue_cache: MutableMapping[int, bool] = {}
         self.session: aiohttp.ClientSession = aiohttp.ClientSession()
         self._connect_task: Optional[asyncio.Task] = None
         self._disconnect_task: Optional[asyncio.Task] = None
@@ -118,6 +119,7 @@ class Audio(commands.Cog):
             auto_play=False,
             autoplaylist=dict(enabled=False, id=None, name=None, scope=None),
             disconnect=False,
+            persist_queue=False,
             dj_enabled=False,
             dj_role=None,
             emptydc_enabled=False,
@@ -181,6 +183,10 @@ class Audio(commands.Cog):
             )
         dj_enabled = self._dj_status_cache.setdefault(
             ctx.guild.id, await self.config.guild(ctx.guild).dj_enabled()
+        )
+
+        persist_cache = self._persist_queue_cache.setdefault(
+            ctx.guild.id, await self.config.guild(ctx.guild).persist_queue()
         )
         if dj_enabled:
             dj_role = self._dj_role_cache.setdefault(
@@ -1286,6 +1292,26 @@ class Audio(commands.Cog):
             ),
         )
 
+    @audioset.command(name="persistqueue")
+    @checks.admin()
+    async def _audioset_persist_queue(self, ctx: commands.Context):
+        """Toggle persistent queues.
+
+        Persistent queues allows the current queue to be restored when the queue closes.
+        """
+        persist_cache = self._persist_queue_cache.setdefault(
+            ctx.guild.id, await self.config.guild(ctx.guild).persist_queue()
+        )
+        await self.config.guild(ctx.guild).persist_queue.set(not persist_cache)
+        self._persist_queue_cache[ctx.guild.id] = not persist_cache
+        await self._embed_msg(
+            ctx,
+            title=_("Setting Changed"),
+            description=_("Persisting queues: {true_or_false}.").format(
+                true_or_false=_("Enabled") if not persist_cache else _("Disabled")
+            ),
+        )
+
     @audioset.command()
     @checks.mod_or_permissions(administrator=True)
     async def emptydisconnect(self, ctx: commands.Context, seconds: int):
@@ -1542,6 +1568,7 @@ class Audio(commands.Cog):
         autoplay = data["auto_play"]
         maxlength = data["maxlength"]
         vote_percent = data["vote_percent"]
+        persist_queue = data["persist_queue"]
         current_level = CacheLevel(global_data["cache_level"])
         song_repeat = _("Enabled") if data["repeat"] else _("Disabled")
         song_shuffle = _("Enabled") if data["shuffle"] else _("Disabled")
@@ -1587,12 +1614,15 @@ class Audio(commands.Cog):
             "Shuffle bumped:   [{bumpped_shuffle}]\n"
             "Song notify msgs: [{notify}]\n"
             "Songs as status:  [{status}]\n"
+            "Persist queue:    [{persist_queue}]\n"
+
         ).format(
             repeat=song_repeat,
             shuffle=song_shuffle,
             notify=song_notify,
             status=song_status,
             bumpped_shuffle=bumpped_shuffle,
+            persist_queue=persist_queue
         )
         if thumbnail:
             msg += _("Thumbnails:       [{0}]\n").format(
@@ -8129,9 +8159,13 @@ class Audio(commands.Cog):
     async def on_red_audio_track_enqueue(
         self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
     ):
-        self.music_cache.persist_queue.enqueued(
-            guild_id=guild.id, room_id=track.extras["vc"], track=track
+        persist_cache = self._persist_queue_cache.setdefault(
+            guild.id, await self.config.guild(guild).persist_queue()
         )
+        if persist_cache:
+            self.music_cache.persist_queue.enqueued(
+                guild_id=guild.id, room_id=track.extras["vc"], track=track
+            )
 
     @commands.Cog.listener()
     async def on_red_audio_track_start(
@@ -8153,6 +8187,12 @@ class Audio(commands.Cog):
                 player: Optional[lavalink.Player]
                 track_data = list(track_data)
                 guild = self.bot.get_guild(guild_id)
+                persist_cache = self._persist_queue_cache.setdefault(
+                    guild.id, await self.config.guild(guild).persist_queue()
+                )
+                if not persist_cache:
+                    self.music_cache.persist_queue.drop(guild_id)
+                    continue
                 if self._connection_aborted:
                     player = None
                 else:
