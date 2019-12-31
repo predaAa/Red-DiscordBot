@@ -8199,6 +8199,7 @@ class Audio(commands.Cog):
                 await player.play()
             except Exception as err:
                 log.exception(f"Error restoring player in {guild_id}", exc_info=err)
+                self.music_cache.persist_queue.drop(guild_id)
             # self.music_cache.persist_queue.drop(guild_id)
 
     def cog_unload(self):
