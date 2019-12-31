@@ -227,6 +227,17 @@ class CacheInterface:
                     log.debug(f"Failed to completed random fetch from database", exc_info=exc)
         return CacheLastFetchResult(*row)
 
+    async def fetch_random(
+        self, table: str, query: str, values: Dict[str, Union[str, int]]
+    ) -> CacheLastFetchResult:
+        table = _PARSER.get(table, {})
+        sql_query = table.get(query, {}).get("played")
+        if not table:
+            raise InvalidTableError(f"{table} is not a valid table in the database.")
+
+        row = self.database.execute(sql_query, values).fetchone()
+        return CacheLastFetchResult(*row)
+
     async def fetch_all_for_global(self) -> List[CacheGetAllLavalink]:
         return [
             CacheGetAllLavalink(*row)
