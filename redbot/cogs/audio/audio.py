@@ -57,6 +57,7 @@ from .playlists import (
     get_all_playlist,
     get_all_playlist_for_migration23,
     get_playlist,
+    get_playlist_database,
 )
 from .utils import *
 
@@ -202,9 +203,10 @@ class Audio(commands.Cog):
             await self._migrate_config(
                 from_version=await self.config.schema_version(), to_version=_SCHEMA_VERSION
             )
-            import redbot.cogs.audio.playlists
-
-            redbot.cogs.audio.playlists.database.delete_scheduled()
+            dat = get_playlist_database()
+            if dat:
+                dat.delete_scheduled()
+            self.music_cache.persist_queue.delete_scheduled()
             self._restart_connect()
             self._disconnect_task = self.bot.loop.create_task(self.disconnect_timer())
             lavalink.register_event_listener(self.event_handler)

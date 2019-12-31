@@ -51,6 +51,11 @@ def _pass_config_to_playlist(config: Config, bot: Red):
         database = PlaylistInterface()
 
 
+def get_playlist_database() -> Optional[PlaylistInterface]:
+    global database
+    return database
+
+
 def standardize_scope(scope: str) -> str:
     scope = scope.upper()
     valid_scopes = ["GLOBAL", "GUILD", "AUTHOR", "USER", "SERVER", "MEMBER", "BOT"]
