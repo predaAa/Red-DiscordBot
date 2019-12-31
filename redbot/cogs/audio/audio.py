@@ -8149,48 +8149,56 @@ class Audio(commands.Cog):
         tries = 0
         tracks_to_restore = self.music_cache.persist_queue.fetch()
         for guild_id, track_data in itertools.groupby(tracks_to_restore, key=lambda x: x.guild_id):
-            player: Optional[lavalink.Player]
-            track_data = list(track_data)
-            guild = self.bot.get_guild(guild_id)
-            if self._connection_aborted:
-                player = None
-            else:
-                try:
-                    player = lavalink.get_player(guild_id)
-                except IndexError:
+            try:
+                player: Optional[lavalink.Player]
+                track_data = list(track_data)
+                guild = self.bot.get_guild(guild_id)
+                if self._connection_aborted:
                     player = None
-                except KeyError:
-                    player = None
-
-            if player is None:
-                while tries < 121:
+                else:
                     try:
-                        vc = guild.get_channel(track_data[0].room_id)
-                        await lavalink.connect(vc)
-                        player = lavalink.get_player(guild.id)
-                        player.store("connect", datetime.datetime.utcnow())
-                        break
+                        player = lavalink.get_player(guild_id)
                     except IndexError:
-                        await asyncio.sleep(5)
-                        tries += 5
-            if tries >= 121 or guild is None:
-                self.music_cache.persist_queue.drop(guild_id)
-                return
+                        player = None
+                    except KeyError:
+                        player = None
 
-            shuffle = await self.config.guild(guild).shuffle()
-            repeat = await self.config.guild(guild).repeat()
-            volume = await self.config.guild(guild).volume()
-            shuffle_bumped = await self.config.guild(guild).shuffle_bumped()
-            player.repeat = repeat
-            player.shuffle = shuffle
-            player.shuffle_bumped = shuffle_bumped
-            if player.volume != volume:
-                await player.set_volume(volume)
-            for track in track_data:
-                track = track.track_object
-                player.add(guild.get_member(track.extras.get("requester")) or guild.me, track)
-            player.maybe_shuffle()
-            await player.play()
+                vc = 0
+                if player is None:
+                    while tries < 121 and vc is not None:
+                        try:
+                            vc = guild.get_channel(track_data[0].room_id)
+                            await lavalink.connect(vc)
+                            player = lavalink.get_player(guild.id)
+                            player.store("connect", datetime.datetime.utcnow())
+                            break
+                        except IndexError:
+                            await asyncio.sleep(5)
+                            tries += 5
+                        except Exception:
+                            if vc is None:
+                                break
+
+                if tries >= 121 or guild is None or vc is None:
+                    self.music_cache.persist_queue.drop(guild_id)
+                    continue
+
+                shuffle = await self.config.guild(guild).shuffle()
+                repeat = await self.config.guild(guild).repeat()
+                volume = await self.config.guild(guild).volume()
+                shuffle_bumped = await self.config.guild(guild).shuffle_bumped()
+                player.repeat = repeat
+                player.shuffle = shuffle
+                player.shuffle_bumped = shuffle_bumped
+                if player.volume != volume:
+                    await player.set_volume(volume)
+                for track in track_data:
+                    track = track.track_object
+                    player.add(guild.get_member(track.extras.get("requester")) or guild.me, track)
+                player.maybe_shuffle()
+                await player.play()
+            except Exception as err:
+                log.exception(f"Error restoring player in {guild_id}", exc_info=err)
             # self.music_cache.persist_queue.drop(guild_id)
 
     def cog_unload(self):
