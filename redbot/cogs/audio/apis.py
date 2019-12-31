@@ -882,6 +882,8 @@ class MusicCache:
                 self.append_task(ctx, *task)
                 valid_global_entry = False
                 called_api = False
+            else:
+                val = None
         if (
             globaldb_toggle
             and not val
