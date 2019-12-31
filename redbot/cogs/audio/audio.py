@@ -204,6 +204,7 @@ class Audio(commands.Cog):
             await self._migrate_config(
                 from_version=await self.config.schema_version(), to_version=_SCHEMA_VERSION
             )
+            dat = get_playlist_database()
             if dat:
                 dat.delete_scheduled()
             self.music_cache.persist_queue.delete_scheduled()
