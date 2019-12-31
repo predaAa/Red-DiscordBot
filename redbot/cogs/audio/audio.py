@@ -1615,14 +1615,13 @@ class Audio(commands.Cog):
             "Song notify msgs: [{notify}]\n"
             "Songs as status:  [{status}]\n"
             "Persist queue:    [{persist_queue}]\n"
-
         ).format(
             repeat=song_repeat,
             shuffle=song_shuffle,
             notify=song_notify,
             status=song_status,
             bumpped_shuffle=bumpped_shuffle,
-            persist_queue=persist_queue
+            persist_queue=persist_queue,
         )
         if thumbnail:
             msg += _("Thumbnails:       [{0}]\n").format(
@@ -5613,7 +5612,8 @@ class Audio(commands.Cog):
             await self._embed_msg(
                 ctx,
                 title=_(
-                    "Please upload the playlist file. Any other message will cancel this operation."
+                    "Please upload the playlist file. "
+                    "Any other message will cancel this operation."
                 ),
             )
 
