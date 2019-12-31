@@ -383,7 +383,7 @@ SELECT data, last_updated
 FROM lavalink
 WHERE
     query=:query
-    AND last_updated < :maxage;
+    AND last_updated > :maxage;
 """
 LAVALINK_QUERY_LAST_FETCHED_RANDOM = """
 SELECT data
