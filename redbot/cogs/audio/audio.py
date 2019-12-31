@@ -1568,13 +1568,13 @@ class Audio(commands.Cog):
         autoplay = data["auto_play"]
         maxlength = data["maxlength"]
         vote_percent = data["vote_percent"]
-        persist_queue = data["persist_queue"]
         current_level = CacheLevel(global_data["cache_level"])
         song_repeat = _("Enabled") if data["repeat"] else _("Disabled")
         song_shuffle = _("Enabled") if data["shuffle"] else _("Disabled")
         bumpped_shuffle = _("Enabled") if data["shuffle_bumped"] else _("Disabled")
         song_notify = _("Enabled") if data["notify"] else _("Disabled")
         song_status = _("Enabled") if global_data["status"] else _("Disabled")
+        persist_queue = _("Enabled") if data["persist_queue"] else _("Disabled")
 
         spotify_cache = CacheLevel.set_spotify()
         youtube_cache = CacheLevel.set_youtube()
@@ -8188,7 +8188,7 @@ class Audio(commands.Cog):
                 track_data = list(track_data)
                 guild = self.bot.get_guild(guild_id)
                 persist_cache = self._persist_queue_cache.setdefault(
-                    guild.id, await self.config.guild(guild).persist_queue()
+                    guild_id, await self.config.guild(guild).persist_queue()
                 )
                 if not persist_cache:
                     self.music_cache.persist_queue.drop(guild_id)
