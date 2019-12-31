@@ -7999,7 +7999,7 @@ class Audio(commands.Cog):
         self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
     ):
         self.music_cache.persist_queue.played(
-            guild_id=guild.id, room_id=track.extras["enqueue_time"], track=track
+            guild_id=guild.id, unix_time=track.extras["enqueue_time"]
         )
 
     @commands.Cog.listener()
@@ -8012,19 +8012,20 @@ class Audio(commands.Cog):
         tries = 0
         tracks_to_restore = self.music_cache.persist_queue.fetch()
         for guild_id, track_data in itertools.groupby(tracks_to_restore, key=lambda x: x.guild_id):
+            player: Optional[lavalink.Player]
             track_data = list(track_data)
             guild = self.bot.get_guild(guild_id)
             if self._connection_aborted:
-                player = False
+                player = None
             else:
                 try:
                     player = lavalink.get_player(guild_id)
                 except IndexError:
-                    player = False
+                    player = None
                 except KeyError:
-                    player = False
+                    player = None
 
-            if player is False:
+            if player is None:
                 while tries < 121:
                     try:
                         vc = guild.get_channel(track_data[0].room_id)
@@ -8035,6 +8036,9 @@ class Audio(commands.Cog):
                     except IndexError:
                         await asyncio.sleep(10)
                         tries += 10
+            if tries >= 121 or guild is None:
+                self.music_cache.persist_queue.drop(guild_id)
+                return
 
             shuffle = await self.config.guild(guild).shuffle()
             repeat = await self.config.guild(guild).repeat()
@@ -8046,7 +8050,10 @@ class Audio(commands.Cog):
             if player.volume != volume:
                 await player.set_volume(volume)
             for track in track_data:
-                player.add(guild.get_member(track.extras.get("requester")), track.track_object)
+                player.add(
+                    guild.get_member(track.track_object.extras.get("requester")) or guild.me,
+                    track.track_object,
+                )
             player.maybe_shuffle()
             await player.play()
 
