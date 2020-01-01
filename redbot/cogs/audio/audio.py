@@ -8334,7 +8334,9 @@ class Audio(commands.Cog):
 
             self._cleaned_up = True
 
+    @autoplay.error
     @bump.error
+    @bumpplay.error
     @disconnect.error
     @genre.error
     @local_folder.error
