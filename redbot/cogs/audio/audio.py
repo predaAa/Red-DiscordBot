@@ -11,9 +11,9 @@ import re
 import time
 import traceback
 from collections import Counter, namedtuple
-from io import StringIO
+from io import BytesIO
 from pathlib import Path
-from typing import List, Optional, Tuple, Union, cast, TYPE_CHECKING, MutableMapping, Mapping
+from typing import List, Optional, Tuple, Union, cast, MutableMapping, Mapping
 
 import aiohttp
 import discord
@@ -106,7 +106,7 @@ class Audio(commands.Cog):
             cache_level=0,
             cache_age=365,
             global_db_enabled=False,
-            global_db_get_timeout=0.5,
+            global_db_get_timeout=2.0,
             status=False,
             use_external_lavalink=False,
             restrict=True,
@@ -120,7 +120,7 @@ class Audio(commands.Cog):
             auto_play=False,
             autoplaylist=dict(enabled=False, id=None, name=None, scope=None),
             disconnect=False,
-            persist_queue=False,
+            persist_queue=True,
             dj_enabled=False,
             dj_role=None,
             emptydc_enabled=False,
@@ -4717,8 +4717,8 @@ class Audio(commands.Cog):
             playlist_data["link"] = playlist.url
             file_name = playlist.id
         playlist_data.update({"schema": schema, "version": version})
-        playlist_data = json.dumps(playlist_data)
-        to_write = StringIO()
+        playlist_data = json.dumps(playlist_data).encode("utf-8")
+        to_write = BytesIO()
         to_write.write(playlist_data)
         to_write.seek(0)
         await ctx.send(file=discord.File(to_write, filename=f"{file_name}.txt"))
@@ -5635,7 +5635,7 @@ class Audio(commands.Cog):
             return await self._embed_msg(ctx, title=_("Only Red playlist files can be uploaded."))
         try:
             async with self.session.request("GET", file_url) as r:
-                uploaded_playlist = await r.json(content_type="text/plain")
+                uploaded_playlist = await r.json(content_type="text/plain", encoding="utf-8")
         except UnicodeDecodeError:
             return await self._embed_msg(ctx, title=_("Not a valid playlist file."))
 
@@ -7598,13 +7598,6 @@ class Audio(commands.Cog):
         is_alone = await self._is_alone(ctx)
         is_requester = await self.is_requester(ctx, ctx.author)
         can_skip = await self._can_instaskip(ctx, ctx.author)
-        player = lavalink.get_player(ctx.guild.id)
-        if (not ctx.author.voice or ctx.author.voice.channel != player.channel) and not can_skip:
-            return await self._embed_msg(
-                ctx,
-                title=_("Unable To Join Voice Channel"),
-                description=_("You must be in the voice channel to summon the bot."),
-            )
         if vote_enabled or (vote_enabled and dj_enabled):
             if not can_skip and not is_alone:
                 return await self._embed_msg(
@@ -8147,6 +8140,7 @@ class Audio(commands.Cog):
         midnight = datetime.datetime.combine(today, datetime.datetime.min.time())
         name = f"Daily playlist - {today}"
         today_id = int(time.mktime(today.timetuple()))
+        track_identifier = track.track_identifier
         track = track_to_json(track)
 
         try:
@@ -8182,6 +8176,7 @@ class Audio(commands.Cog):
             await delete_playlist(
                 scope=scope, playlist_id=too_old_id, guild=guild, author=self.bot.user
             )
+        self.music_cache.persist_queue.played(guild_id=guild.id, track_id=track_identifier)
 
     @commands.Cog.listener()
     async def on_voice_state_update(
@@ -8207,17 +8202,18 @@ class Audio(commands.Cog):
             )
 
     @commands.Cog.listener()
-    async def on_red_audio_track_start(
-        self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
-    ):
-        self.music_cache.persist_queue.played(guild_id=guild.id, track_id=track.track_identifier)
-
-    @commands.Cog.listener()
     async def on_red_audio_queue_end(
         self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
     ):
         self.music_cache.persist_queue.drop(guild.id)
-        self.music_cache.database.clean_up_old_entries()
+        await asyncio.sleep(5)
+        await self.music_cache.database.clean_up_old_entries()
+        await asyncio.sleep(5)
+        dat = get_playlist_database()
+        if dat:
+            dat.delete_scheduled()
+            await asyncio.sleep(5)
+        self.music_cache.persist_queue.delete_scheduled()
 
     async def restore_players(self):
         tries = 0
