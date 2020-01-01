@@ -8147,6 +8147,7 @@ class Audio(commands.Cog):
         midnight = datetime.datetime.combine(today, datetime.datetime.min.time())
         name = f"Daily playlist - {today}"
         today_id = int(time.mktime(today.timetuple()))
+        track_identifier = track.track_identifier
         track = track_to_json(track)
 
         try:
@@ -8182,6 +8183,7 @@ class Audio(commands.Cog):
             await delete_playlist(
                 scope=scope, playlist_id=too_old_id, guild=guild, author=self.bot.user
             )
+        self.music_cache.persist_queue.played(guild_id=guild.id, track_id=track_identifier)
 
     @commands.Cog.listener()
     async def on_voice_state_update(
@@ -8207,17 +8209,18 @@ class Audio(commands.Cog):
             )
 
     @commands.Cog.listener()
-    async def on_red_audio_track_start(
-        self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
-    ):
-        self.music_cache.persist_queue.played(guild_id=guild.id, track_id=track.track_identifier)
-
-    @commands.Cog.listener()
     async def on_red_audio_queue_end(
         self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
     ):
         self.music_cache.persist_queue.drop(guild.id)
+        await asyncio.sleep(5)
         self.music_cache.database.clean_up_old_entries()
+        await asyncio.sleep(5)
+        dat = get_playlist_database()
+        if dat:
+            dat.delete_scheduled()
+            await asyncio.sleep(5)
+        self.music_cache.persist_queue.delete_scheduled()
 
     async def restore_players(self):
         tries = 0
