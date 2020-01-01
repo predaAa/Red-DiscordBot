@@ -106,7 +106,7 @@ class Audio(commands.Cog):
             cache_level=0,
             cache_age=365,
             global_db_enabled=False,
-            global_db_get_timeout=0.5,
+            global_db_get_timeout=2.0,
             status=False,
             use_external_lavalink=False,
             restrict=True,
