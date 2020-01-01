@@ -120,7 +120,7 @@ class Audio(commands.Cog):
             auto_play=False,
             autoplaylist=dict(enabled=False, id=None, name=None, scope=None),
             disconnect=False,
-            persist_queue=False,
+            persist_queue=True,
             dj_enabled=False,
             dj_role=None,
             emptydc_enabled=False,
