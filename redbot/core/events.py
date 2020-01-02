@@ -19,9 +19,9 @@ from redbot.core.commands import RedHelpFormatter
 from .. import __version__ as red_version, version_info as red_version_info, VersionInfo
 from . import commands
 from .config import get_latest_confs
-from .data_manager import storage_type
+from .utils._internal_utils import fuzzy_command_search, format_fuzzy_results
 from .utils.chat_formatting import inline, bordered, format_perms_list, humanize_timedelta
-from .utils import fuzzy_command_search, format_fuzzy_results, menus
+from .utils import menus
 
 log = logging.getLogger("red")
 init()
@@ -184,7 +184,7 @@ def init_events(bot, cli_flags):
             )
             message += "```" + "\n"
             message += "Use the ``b!support`` command \nThen join the support server and the owner of the bot or a mod will help you when they are available"
-            
+
             exception_log = "Exception in command '{}'\n" "".format(ctx.command.qualified_name)
             exception_log += "".join(
                 traceback.format_exception(type(error), error, error.__traceback__)

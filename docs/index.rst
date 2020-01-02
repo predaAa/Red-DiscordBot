@@ -24,7 +24,6 @@ Welcome to Red - Discord Bot's documentation!
     :caption: Cog Reference:
 
     cog_customcom
-    cog_downloader
     cog_permissions
 
 .. toctree::
@@ -39,6 +38,7 @@ Welcome to Red - Discord Bot's documentation!
 
     guide_migration
     guide_cog_creation
+    guide_publish_cogs
     framework_apikeys
     framework_bank
     framework_bot
@@ -47,7 +47,6 @@ Welcome to Red - Discord Bot's documentation!
     framework_commands
     framework_config
     framework_datamanager
-    framework_downloader
     framework_events
     framework_i18n
     framework_modlog
