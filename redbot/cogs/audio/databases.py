@@ -463,7 +463,6 @@ class QueueInterface:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             executor.submit(
                 self.cursor.execute,
-                (
                     PERSIST_QUEUE_UPSERT,
                     (
                         {
@@ -475,7 +474,6 @@ class QueueInterface:
                             "track_id": track_identifier,
                         }
                     ),
-                ),
             )
 
 
