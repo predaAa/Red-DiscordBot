@@ -134,12 +134,13 @@ def init_events(bot, cli_flags):
         humanized_launch_time = humanize_timedelta(seconds=bot.launch_time) or "1 second"
         chan = bot.get_guild(489162733791739950).get_channel(646857954175221810)
         embed = discord.Embed(
-            description=("\N{WHITE HEAVY CHECK MARK} **BB-8 is Up and ready for use!**\n\nLaunch Time: **{}**").format(humanized_launch_time),
-            color = 0x00FF00
+            description=(
+                "\N{WHITE HEAVY CHECK MARK} **BB-8 is Up and ready for use!**\n\nLaunch Time: **{}**"
+            ).format(humanized_launch_time),
+            color=0x00FF00,
         )
         await chan.send(embed=embed)
         await bot.change_presence(status=discord.Status.online, activity=None)
-
 
     @bot.event
     async def on_command_error(ctx, error, unhandled_by_cog=False):
@@ -302,7 +303,7 @@ def init_events(bot, cli_flags):
 
     @bot.event
     async def on_socket_response(msg):
-        bot.socket_stats[msg.get('t')] += 1
+        bot.socket_stats[msg.get("t")] += 1
 
 
 def _get_startup_screen_specs():
