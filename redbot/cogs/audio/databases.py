@@ -1,3 +1,5 @@
+import asyncio
+import concurrent.futures
 import contextlib
 import datetime
 import json
@@ -138,7 +140,6 @@ class CacheInterface:
         self.database.execute(PRAGMA_SET_temp_store)
         self.database.execute(PRAGMA_SET_journal_mode)
         self.database.execute(PRAGMA_SET_read_uncommitted)
-
         self.maybe_migrate()
 
         self.database.execute(LAVALINK_CREATE_TABLE)
@@ -155,9 +156,10 @@ class CacheInterface:
         maxage = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=max_age)
         maxage_int = int(time.mktime(maxage.timetuple()))
         values = {"maxage": maxage_int}
-        self.database.execute(LAVALINK_DELETE_OLD_ENTRIES, values)
-        self.database.execute(YOUTUBE_DELETE_OLD_ENTRIES, values)
-        self.database.execute(SPOTIFY_DELETE_OLD_ENTRIES, values)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            executor.submit(self.database.execute, LAVALINK_DELETE_OLD_ENTRIES, values)
+            executor.submit(self.database.execute, YOUTUBE_DELETE_OLD_ENTRIES, values)
+            executor.submit(self.database.execute, SPOTIFY_DELETE_OLD_ENTRIES, values)
 
     def maybe_migrate(self):
         current_version = self.database.execute(PRAGMA_FETCH_user_version).fetchone()
@@ -186,7 +188,8 @@ class CacheInterface:
             values["last_fetched"] = time_now
             if not table:
                 raise InvalidTableError(f"{table} is not a valid table in the database.")
-            self.database.execute(sql_query, values)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(self.database.execute, sql_query, values)
         except Exception as err:
             log.debug("Error during audio db update", exc_info=err)
 
@@ -213,10 +216,12 @@ class CacheInterface:
         if not table:
             raise InvalidTableError(f"{table} is not a valid table in the database.")
 
-        return [
-            CacheLastFetchResult(*row)
-            for row in self.database.execute(sql_query, values).fetchall()
-        ]
+        output = []
+        for index, row in enumerate(self.database.execute(sql_query, values), start=1):
+            if index % 50 == 0:
+                await asyncio.sleep(0.01)
+            output.append(CacheLastFetchResult(*row))
+        return output
 
     async def fetch_random(
         self, table: str, query: str, values: Dict[str, Union[str, int]]
@@ -226,14 +231,22 @@ class CacheInterface:
         if not table:
             raise InvalidTableError(f"{table} is not a valid table in the database.")
 
-        row = self.database.execute(sql_query, values).fetchone()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            for future in concurrent.futures.as_completed([executor.submit(self.database.execute, sql_query, values)]):
+                try:
+                    row = future.result()
+                    row = row.fetchone()
+                except Exception as exc:
+                    log.debug(f"Failed to completed random fetch from database", exc_info=exc)
         return CacheLastFetchResult(*row)
 
     async def fetch_all_for_global(self) -> List[CacheGetAllLavalink]:
-        return [
-            CacheGetAllLavalink(*row)
-            for row in self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL).fetchall()
-        ]
+        output = []
+        for index, row in enumerate(self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL), start=1):
+            if index % 50 == 0:
+                await asyncio.sleep(0.01)
+            output.append(CacheGetAllLavalink(*row))
+        return output
 
 
 class PlaylistInterface:
@@ -272,20 +285,23 @@ class PlaylistInterface:
 
         return PlaylistFetchResult(*row) if row else None
 
-    def fetch_all(self, scope: str, scope_id: int, author_id=None) -> List[PlaylistFetchResult]:
+    async def fetch_all(self, scope: str, scope_id: int, author_id=None) -> List[PlaylistFetchResult]:
         scope_type = self.get_scope_type(scope)
         if author_id is not None:
-            output = self.cursor.execute(
-                PLAYLIST_FETCH_ALL_WITH_FILTER,
-                ({"scope_type": scope_type, "scope_id": scope_id, "author_id": author_id}),
-            ).fetchall()
+            output = []
+            for index, row in enumerate(self.cursor.execute(PLAYLIST_FETCH_ALL_WITH_FILTER, ({"scope_type": scope_type, "scope_id": scope_id, "author_id": author_id})), start=1):
+                if index % 50 == 0:
+                    await asyncio.sleep(0.01)
+                output.append(row)
         else:
-            output = self.cursor.execute(
-                PLAYLIST_FETCH_ALL, ({"scope_type": scope_type, "scope_id": scope_id})
-            ).fetchall()
+            output = []
+            for index, row in enumerate(self.cursor.execute(PLAYLIST_FETCH_ALL, ({"scope_type": scope_type, "scope_id": scope_id})), start=1):
+                if index % 50 == 0:
+                    await asyncio.sleep(0.01)
+                output.append(row)
         return [PlaylistFetchResult(*row) for row in output] if output else []
 
-    def fetch_all_converter(
+    async def fetch_all_converter(
         self, scope: str, playlist_name, playlist_id
     ) -> List[PlaylistFetchResult]:
         scope_type = self.get_scope_type(scope)
@@ -293,34 +309,34 @@ class PlaylistInterface:
             playlist_id = int(playlist_id)
         except Exception:
             playlist_id = -1
-        output = (
-            self.cursor.execute(
-                PLAYLIST_FETCH_ALL_CONVERTER,
-                (
+
+        output = []
+        for index, row in enumerate(self.cursor.execute(PLAYLIST_FETCH_ALL_CONVERTER, (
                     {
                         "scope_type": scope_type,
                         "playlist_name": playlist_name,
                         "playlist_id": playlist_id,
                     }
-                ),
-            ).fetchall()
-            or []
-        )
+                )
+                                                        ), start=1):
+            if index % 50 == 0:
+                await asyncio.sleep(0.01)
+            output.append(row)
         return [PlaylistFetchResult(*row) for row in output] if output else []
 
     def delete(self, scope: str, playlist_id: int, scope_id: int):
         scope_type = self.get_scope_type(scope)
-        return self.cursor.execute(
-            PLAYLIST_DELETE,
-            ({"playlist_id": playlist_id, "scope_id": scope_id, "scope_type": scope_type}),
-        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self.cursor.execute, PLAYLIST_DELETE, ({"playlist_id": playlist_id, "scope_id": scope_id, "scope_type": scope_type}))
 
     def delete_scheduled(self):
-        return self.cursor.execute(PLAYLIST_DELETE_SCHEDULED)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self.cursor.execute, PLAYLIST_DELETE_SCHEDULED)
 
     def drop(self, scope: str):
         scope_type = self.get_scope_type(scope)
-        return self.cursor.execute(PLAYLIST_DELETE_SCOPE, ({"scope_type": scope_type}))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self.cursor.execute, PLAYLIST_DELETE_SCOPE, ({"scope_type": scope_type}))
 
     def create_table(self, scope: str):
         scope_type = self.get_scope_type(scope)
@@ -337,20 +353,21 @@ class PlaylistInterface:
         tracks: List[MutableMapping],
     ):
         scope_type = self.get_scope_type(scope)
-        self.cursor.execute(
-            PLAYLIST_UPSERT,
-            (
-                {
-                    "scope_type": str(scope_type),
-                    "playlist_id": int(playlist_id),
-                    "playlist_name": str(playlist_name),
-                    "scope_id": int(scope_id),
-                    "author_id": int(author_id),
-                    "playlist_url": playlist_url,
-                    "tracks": json.dumps(tracks),
-                }
-            ),
-        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self.cursor.execute, (
+                PLAYLIST_UPSERT,
+                (
+                    {
+                        "scope_type": str(scope_type),
+                        "playlist_id": int(playlist_id),
+                        "playlist_name": str(playlist_name),
+                        "scope_id": int(scope_id),
+                        "author_id": int(author_id),
+                        "playlist_url": playlist_url,
+                        "tracks": json.dumps(tracks),
+                    }
+                ),
+            ))
 
 
 class QueueInterface:
@@ -367,21 +384,28 @@ class QueueInterface:
         with contextlib.suppress(Exception):
             database_connection.close()
 
-    def fetch(self) -> List[QueueFetchResult]:
-        output = self.cursor.execute(PERSIST_QUEUE_FETCH_ALL).fetchall() or []
+    async def fetch(self) -> List[QueueFetchResult]:
+        output = []
+        for index, row in enumerate(self.cursor.execute(PERSIST_QUEUE_FETCH_ALL), start=1):
+            if index % 50 == 0:
+                await asyncio.sleep(0.01)
+            output.append(row)
 
         return [QueueFetchResult(*row) for row in output] if output else []
 
     def played(self, guild_id: int, track_id: str):
-        return self.cursor.execute(
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self.cursor.execute, (
             PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "track_id": track_id})
-        )
+        ))
 
     def delete_scheduled(self):
-        return self.cursor.execute(PERSIST_QUEUE_DELETE_SCHEDULED)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self.cursor.execute, PERSIST_QUEUE_DELETE_SCHEDULED)
 
     def drop(self, guild_id: int):
-        return self.cursor.execute(PERSIST_QUEUE_BULK_PLAYED, ({"guild_id": guild_id}))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self.cursor.execute, PERSIST_QUEUE_BULK_PLAYED, ({"guild_id": guild_id}))
 
     def enqueued(self, guild_id: int, room_id: int, track: lavalink.Track):
         enqueue_time = track.extras.get("enqueue_time", 0)
@@ -389,7 +413,8 @@ class QueueInterface:
             track.extras["enqueue_time"] = int(time.time())
         track_identifier = track.track_identifier
         track = track_to_json(track)
-        self.cursor.execute(
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self.cursor.execute, (
             PERSIST_QUEUE_UPSERT,
             (
                 {
@@ -401,4 +426,4 @@ class QueueInterface:
                     "track_id": track_identifier,
                 }
             ),
-        )
+        ))

@@ -8217,7 +8217,7 @@ class Audio(commands.Cog):
 
     async def restore_players(self):
         tries = 0
-        tracks_to_restore = self.music_cache.persist_queue.fetch()
+        tracks_to_restore = await self.music_cache.persist_queue.fetch()
         for guild_id, track_data in itertools.groupby(tracks_to_restore, key=lambda x: x.guild_id):
             try:
                 player: Optional[lavalink.Player]
