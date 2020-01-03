@@ -4,6 +4,7 @@ import random
 from collections import defaultdict, deque, namedtuple
 from enum import Enum
 from typing import cast, Iterable, Union
+import math
 
 import discord
 
@@ -442,21 +443,22 @@ class Economy(commands.Cog):
 
     @commands.command()
     @guild_only_check()
-    async def leaderboard(self, ctx: commands.Context, top: int = 10, show_global: bool = False):
-        """Print the leaderboard.
-
-        Defaults to top 10.
-        """
+    async def leaderboard(self, ctx: commands.Context):
+        """Print the global leaderboard.
+       """
         guild = ctx.guild
         author = ctx.author
         max_bal = await bank.get_max_balance(ctx.guild)
-        if top < 1:
-            top = 10
-        if await bank.is_global() and show_global:
-            # show_global is only applicable if bank is global
-            bank_sorted = await bank.get_leaderboard(positions=top, guild=None)
-        else:
-            bank_sorted = await bank.get_leaderboard(positions=top, guild=guild)
+        all_accounts = len(await bank._conf.all_users())
+        accounts = await bank._conf.all_users()
+        overall = 0
+        for key, value in accounts.items():
+            overall += value["balance"]
+        overall_total = humanize_number(overall)
+        user_bal = await bank.get_balance(ctx.author)
+        percent = round((int(user_bal) / overall * 100), 3)
+        pos = await bank.get_leaderboard_position(ctx.author)
+        bank_sorted = await bank.get_leaderboard(positions=all_accounts, guild=None)
         try:
             bal_len = len(humanize_number(bank_sorted[0][1]["balance"]))
             bal_len_max = len(humanize_number(max_bal))
@@ -473,45 +475,59 @@ class Economy(commands.Cog):
             bal_len=bal_len + 6,
             pound_len=pound_len + 3,
         )
-        highscores = []
-        pos = 1
+        pages = []
+        total_pages = math.ceil(all_accounts/10)
+        embed = discord.Embed(
+            title="Imperial Bank Leaderboard",
+            color= await ctx.embed_color()
+        )
+        highscores = ""
         temp_msg = header
-        for acc in bank_sorted:
+        for i, acc in enumerate(bank_sorted, start=1):
             try:
                 name = guild.get_member(acc[0]).display_name
             except AttributeError:
                 user_id = ""
                 if await ctx.bot.is_owner(ctx.author):
                     user_id = f"({str(acc[0])})"
-                name = f"{acc[1]['name']} {user_id}"
-
+                name = f"{acc[1]['name']}"
+ 
             balance = acc[1]["balance"]
             if balance > max_bal:
                 balance = max_bal
                 await bank.set_balance(MOCK_MEMBER(acc[0], guild), balance)
             balance = humanize_number(balance)
             if acc[0] != author.id:
-                temp_msg += (
-                    f"{f'{humanize_number(pos)}.': <{pound_len+2}} "
+                highscores += (
+                    f"{f'{humanize_number(i)}.': <{pound_len+2}} "
                     f"{balance: <{bal_len + 5}} {name}\n"
                 )
-
+ 
             else:
-                temp_msg += (
-                    f"{f'{humanize_number(pos)}.': <{pound_len+2}} "
+                highscores += (
+                    f"{f'{humanize_number(i)}.': <{pound_len+2}} "
                     f"{balance: <{bal_len + 5}} "
                     f"<<{author.display_name}>>\n"
                 )
-            if pos % 10 == 0:
-                highscores.append(box(temp_msg, lang="md"))
-                temp_msg = header
-            pos += 1
 
-        if temp_msg != header:
-            highscores.append(box(temp_msg, lang="md"))
-
+            if i % 10 == 0:
+                embed = discord.Embed(
+                title="Imperial Bank Leaderboard\nYou are currently #{}/{}".format(pos, all_accounts),
+                color= await ctx.embed_color(),
+                description="```md\n{}``` ```md\n{}``` ```py\nTotal bank amount {}\nYou have {}% of the total amount!```".format(header, highscores, overall_total, percent))
+                embed.set_footer(text=f"Page {i//10}/{total_pages}")
+                pages.append(embed)
+                highscores = ""
         if highscores:
-            await menu(ctx, highscores, DEFAULT_CONTROLS)
+            embed = discord.Embed(
+                    title="Imperial Bank Leaderboard",
+                    color= await ctx.embed_color(),
+                    description="```md\n{}``` ```md\n{}``` ```py\nTotal bank amount {}\nYou have {}% of the total amount!```".format(header, highscores, overall_total, percent))
+            embed.set_footer(text=f"Page {i//10}/{total_pages}")
+            pages.append(embed)
+ 
+        if pages:
+            return await menu(ctx, pages, DEFAULT_CONTROLS)
 
     @commands.command()
     @guild_only_check()
