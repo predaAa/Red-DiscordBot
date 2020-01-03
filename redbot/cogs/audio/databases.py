@@ -232,7 +232,9 @@ class CacheInterface:
             raise InvalidTableError(f"{table} is not a valid table in the database.")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            for future in concurrent.futures.as_completed([executor.submit(self.database.execute, sql_query, values)]):
+            for future in concurrent.futures.as_completed(
+                [executor.submit(self.database.execute, sql_query, values)]
+            ):
                 try:
                     row = future.result()
                     row = row.fetchone()
@@ -242,7 +244,9 @@ class CacheInterface:
 
     async def fetch_all_for_global(self) -> List[CacheGetAllLavalink]:
         output = []
-        for index, row in enumerate(self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL), start=1):
+        for index, row in enumerate(
+            self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL), start=1
+        ):
             if index % 50 == 0:
                 await asyncio.sleep(0.01)
             output.append(CacheGetAllLavalink(*row))
@@ -302,17 +306,30 @@ class PlaylistInterface:
 
         return PlaylistFetchResult(*row) if row else None
 
-    async def fetch_all(self, scope: str, scope_id: int, author_id=None) -> List[PlaylistFetchResult]:
+    async def fetch_all(
+        self, scope: str, scope_id: int, author_id=None
+    ) -> List[PlaylistFetchResult]:
         scope_type = self.get_scope_type(scope)
         if author_id is not None:
             output = []
-            for index, row in enumerate(self.cursor.execute(PLAYLIST_FETCH_ALL_WITH_FILTER, ({"scope_type": scope_type, "scope_id": scope_id, "author_id": author_id})), start=1):
+            for index, row in enumerate(
+                self.cursor.execute(
+                    PLAYLIST_FETCH_ALL_WITH_FILTER,
+                    ({"scope_type": scope_type, "scope_id": scope_id, "author_id": author_id}),
+                ),
+                start=1,
+            ):
                 if index % 50 == 0:
                     await asyncio.sleep(0.01)
                 output.append(row)
         else:
             output = []
-            for index, row in enumerate(self.cursor.execute(PLAYLIST_FETCH_ALL, ({"scope_type": scope_type, "scope_id": scope_id})), start=1):
+            for index, row in enumerate(
+                self.cursor.execute(
+                    PLAYLIST_FETCH_ALL, ({"scope_type": scope_type, "scope_id": scope_id})
+                ),
+                start=1,
+            ):
                 if index % 50 == 0:
                     await asyncio.sleep(0.01)
                 output.append(row)
@@ -328,14 +345,19 @@ class PlaylistInterface:
             playlist_id = -1
 
         output = []
-        for index, row in enumerate(self.cursor.execute(PLAYLIST_FETCH_ALL_CONVERTER, (
+        for index, row in enumerate(
+            self.cursor.execute(
+                PLAYLIST_FETCH_ALL_CONVERTER,
+                (
                     {
                         "scope_type": scope_type,
                         "playlist_name": playlist_name,
                         "playlist_id": playlist_id,
                     }
-                )
-                                                        ), start=1):
+                ),
+            ),
+            start=1,
+        ):
             if index % 50 == 0:
                 await asyncio.sleep(0.01)
             output.append(row)
@@ -344,7 +366,11 @@ class PlaylistInterface:
     def delete(self, scope: str, playlist_id: int, scope_id: int):
         scope_type = self.get_scope_type(scope)
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(self.cursor.execute, PLAYLIST_DELETE, ({"playlist_id": playlist_id, "scope_id": scope_id, "scope_type": scope_type}))
+            executor.submit(
+                self.cursor.execute,
+                PLAYLIST_DELETE,
+                ({"playlist_id": playlist_id, "scope_id": scope_id, "scope_type": scope_type}),
+            )
 
     def delete_scheduled(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -353,7 +379,9 @@ class PlaylistInterface:
     def drop(self, scope: str):
         scope_type = self.get_scope_type(scope)
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(self.cursor.execute, PLAYLIST_DELETE_SCOPE, ({"scope_type": scope_type}))
+            executor.submit(
+                self.cursor.execute, PLAYLIST_DELETE_SCOPE, ({"scope_type": scope_type})
+            )
 
     def create_table(self, scope: str):
         scope_type = self.get_scope_type(scope)
@@ -371,9 +399,10 @@ class PlaylistInterface:
     ):
         scope_type = self.get_scope_type(scope)
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(self.cursor.execute, (
-                PLAYLIST_UPSERT,
+            executor.submit(
+                self.cursor.execute,
                 (
+                    PLAYLIST_UPSERT,
                     {
                         "scope_type": str(scope_type),
                         "playlist_id": int(playlist_id),
@@ -382,9 +411,9 @@ class PlaylistInterface:
                         "author_id": int(author_id),
                         "playlist_url": playlist_url,
                         "tracks": json.dumps(tracks),
-                    }
+                    },
                 ),
-            ))
+            )
 
 
 class QueueInterface:
@@ -412,9 +441,10 @@ class QueueInterface:
 
     def played(self, guild_id: int, track_id: str):
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(self.cursor.execute, (
-            PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "track_id": track_id})
-        ))
+            executor.submit(
+                self.cursor.execute,
+                (PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "track_id": track_id})),
+            )
 
     def delete_scheduled(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -422,7 +452,9 @@ class QueueInterface:
 
     def drop(self, guild_id: int):
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(self.cursor.execute, PERSIST_QUEUE_BULK_PLAYED, ({"guild_id": guild_id}))
+            executor.submit(
+                self.cursor.execute, PERSIST_QUEUE_BULK_PLAYED, ({"guild_id": guild_id})
+            )
 
     def enqueued(self, guild_id: int, room_id: int, track: lavalink.Track):
         enqueue_time = track.extras.get("enqueue_time", 0)
@@ -431,19 +463,22 @@ class QueueInterface:
         track_identifier = track.track_identifier
         track = track_to_json(track)
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(self.cursor.execute, (
-            PERSIST_QUEUE_UPSERT,
-            (
-                {
-                    "guild_id": int(guild_id),
-                    "room_id": int(room_id),
-                    "played": False,
-                    "time": enqueue_time,
-                    "track": json.dumps(track),
-                    "track_id": track_identifier,
-                }
-            ),
-        ))
+            executor.submit(
+                self.cursor.execute,
+                (
+                    PERSIST_QUEUE_UPSERT,
+                    (
+                        {
+                            "guild_id": int(guild_id),
+                            "room_id": int(room_id),
+                            "played": False,
+                            "time": enqueue_time,
+                            "track": json.dumps(track),
+                            "track_id": track_identifier,
+                        }
+                    ),
+                ),
+            )
 
 
 class QueueInterface:
