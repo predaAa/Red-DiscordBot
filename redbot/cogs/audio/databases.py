@@ -441,7 +441,7 @@ class QueueInterface:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             executor.submit(
                 self.cursor.execute,
-                (PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "track_id": track_id})),
+                PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "track_id": track_id}),
             )
 
     def delete_scheduled(self):
