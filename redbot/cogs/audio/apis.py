@@ -2,10 +2,12 @@ import asyncio
 import base64
 import contextlib
 import datetime
+import hashlib
 import json
 import logging
 import random
 import time
+import uuid
 import urllib.parse
 from collections import namedtuple
 from typing import Callable, List, MutableMapping, Optional, TYPE_CHECKING, Tuple, Union, NoReturn
@@ -21,11 +23,16 @@ from redbot.core.i18n import Translator, cog_i18n
 
 from . import audio_dataclasses
 from .databases import CacheGetAllLavalink, CacheInterface, QueueInterface, SQLError
-from .errors import DatabaseError, SpotifyFetchError, TrackEnqueueError, YouTubeApiError
+from .errors import (
+    DatabaseError,
+    SpotifyFetchError,
+    TrackEnqueueError,
+    YouTubeApiError,
+)
 from .playlists import get_playlist
 from .utils import CacheLevel, Notifier, is_allowed, queue_duration, track_limit
 
-log = logging.getLogger("red.audio.cache")
+log = logging.getLogger("red.cogs.Audio.apis")
 _ = Translator("Audio", __file__)
 
 _TOP_100_GLOBALS = "https://www.youtube.com/playlist?list=PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i"
@@ -63,16 +70,27 @@ class AudioDBAPI:
         self.bot = bot
         self.session = session
         self.api_key = None
+        self._handshake_token = ""
 
     async def _get_api_key(self,) -> Optional[str]:
         global _WRITE_GLOBAL_API_ACCESS
         tokens = await self.bot.get_shared_api_tokens("audiodb")
         self.api_key = tokens.get("api_key", None)
         _WRITE_GLOBAL_API_ACCESS = self.api_key is not None
+        id_list = list(_bot._co_owners)
+        id_list.append(_bot.owner_id)
+        self._handshake_token = "||".join(list(map(str, id_list)))
         return self.api_key
 
+    @staticmethod
+    def uuid_from_id(seed: str) -> str:
+        m = hashlib.md5()
+        m.update(f"{seed}".encode("utf-8"))
+        return f"{uuid.UUID(m.hexdigest())}"
+
     async def get_call(self, query: Optional[audio_dataclasses.Query] = None) -> Optional[dict]:
-        with contextlib.suppress(Exception):
+        api_url = f"{_API_URL}api/v1/queries"
+        try:
             query = audio_dataclasses.Query.process_input(query)
             if any([not query or not query.valid or query.is_spotify or query.is_local]):
                 return {}
@@ -84,12 +102,14 @@ class AudioDBAPI:
                 async with self.session.get(
                     api_url,
                     timeout=aiohttp.ClientTimeout(total=await _config.global_db_get_timeout()),
+                    headers={"X-Token": self._handshake_token},
                     params={"query": urllib.parse.quote(query)},
                 ) as r:
                     search_response = await r.json()
                     if "x-process-time" in r.headers:
                         log.debug(
-                            f"GET || Ping {r.headers['x-process-time']} || Status code {r.status} || {query}"
+                            f"GET || Ping {r.headers.get('x-process-time')} || "
+                            f"Status code {r.status} || {query}"
                         )
             if "tracks" not in search_response:
                 return {}
@@ -97,21 +117,23 @@ class AudioDBAPI:
         return {}
 
     async def get_spotify(self, title: str, author: Optional[str]) -> Optional[dict]:
-        with contextlib.suppress(Exception):
+        api_url = f"{_API_URL}api/v1/queries/spotify"
+        try:
             search_response = "error"
-            api_url = f"{_API_URL}api/v1/queries/spotify"
             params = {"title": urllib.parse.quote(title), "author": urllib.parse.quote(author)}
             await self._get_api_key()
             with contextlib.suppress(aiohttp.ContentTypeError, asyncio.TimeoutError):
                 async with self.session.get(
                     api_url,
                     timeout=aiohttp.ClientTimeout(total=await _config.global_db_get_timeout()),
+                    headers={"X-Token": self._handshake_token},
                     params=params,
                 ) as r:
                     search_response = await r.json()
                     if "x-process-time" in r.headers:
                         log.debug(
-                            f"GET/spotify || Ping {r.headers['x-process-time']} || Status code {r.status} || {title} - {author}"
+                            f"GET/spotify || Ping {r.headers.get('x-process-time')} || "
+                            f"Status code {r.status} || {title} - {author}"
                         )
             if "tracks" not in search_response:
                 return None
@@ -121,7 +143,7 @@ class AudioDBAPI:
     async def post_call(
         self, llresponse: LoadResult, query: Optional[audio_dataclasses.Query]
     ) -> None:
-        with contextlib.suppress(Exception):
+        try:
             query = audio_dataclasses.Query.process_input(query)
             if llresponse.has_error or llresponse.load_type.value in ["NO_MATCHES", "LOAD_FAILED"]:
                 return
@@ -129,20 +151,20 @@ class AudioDBAPI:
                 query = query.lavalink_query
             else:
                 return None
-            token = await self._get_api_key()
-            if token is None:
+            await self._get_api_key()
+            if self.api_key is None:
                 return None
             api_url = f"{_API_URL}api/v1/queries"
             async with self.session.post(
                 api_url,
                 json=llresponse._raw,
-                headers={"Authorization": token},
+                headers={"Authorization": self.api_key, "X-Token": self._handshake_token},
                 params={"query": urllib.parse.quote(query)},
             ) as r:
                 output = await r.read()
                 if "x-process-time" in r.headers:
                     log.debug(
-                        f"POST || Ping {r.headers['x-process-time']} ||"
+                        f"POST || Ping {r.headers.get('x-process-time')} ||"
                         f" Status code {r.status} || {query}"
                     )
 
@@ -488,7 +510,6 @@ class MusicCache:
         params: MutableMapping = None,
         notifier: Optional[Notifier] = None,
     ) -> Union[MutableMapping, List[str]]:
-
         if recursive is False:
             (call, params) = self._spotify_format_call(query_type, uri)
             results = await self.spotify_api.get_call(call, params)
