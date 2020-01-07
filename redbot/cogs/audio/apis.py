@@ -23,6 +23,8 @@ from redbot.core.i18n import Translator, cog_i18n
 
 from . import audio_dataclasses
 from .databases import CacheGetAllLavalink, CacheInterface, QueueInterface, SQLError
+from .debug import debug_exc_log
+
 from .errors import (
     DatabaseError,
     SpotifyFetchError,
@@ -114,6 +116,8 @@ class AudioDBAPI:
             if "tracks" not in search_response:
                 return {}
             return search_response
+        except Exception as err:
+            debug_exc_log(log, err, f"Failed to Get query: {api_url}/{query}")
         return {}
 
     async def get_spotify(self, title: str, author: Optional[str]) -> Optional[dict]:
@@ -138,6 +142,8 @@ class AudioDBAPI:
             if "tracks" not in search_response:
                 return None
             return search_response
+        except Exception as err:
+            debug_exc_log(log, err, f"Failed to post query: {api_url}")
         return {}
 
     async def post_call(
@@ -167,6 +173,8 @@ class AudioDBAPI:
                         f"POST || Ping {r.headers.get('x-process-time')} ||"
                         f" Status code {r.status} || {query}"
                     )
+        except Exception as err:
+            debug_exc_log(log, err, f"Failed to post query: {query}")
 
 
 if TYPE_CHECKING:
