@@ -177,26 +177,6 @@ class AudioDBAPI:
             debug_exc_log(log, err, f"Failed to post query: {query}")
 
 
-if TYPE_CHECKING:
-    _database: CacheInterface
-    _bot: Red
-    _config: Config
-else:
-    _database = None
-    _bot = None
-    _config = None
-
-
-def _pass_config_to_apis(config: Config, bot: Red):
-    global _database, _config, _bot
-    if _config is None:
-        _config = config
-    if _bot is None:
-        _bot = bot
-    if _database is None:
-        _database = CacheInterface()
-
-
 class SpotifyAPI:
     """Wrapper for the Spotify API."""
 
