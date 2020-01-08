@@ -21,7 +21,7 @@ from redbot.core.i18n import Translator, cog_i18n
 
 from . import audio_dataclasses
 from .databases import CacheGetAllLavalink, CacheInterface, QueueInterface, SQLError
-from .errors import DatabaseError, SpotifyFetchError, YouTubeApiError
+from .errors import DatabaseError, SpotifyFetchError, TrackEnqueueError, YouTubeApiError
 from .playlists import get_playlist
 from .utils import CacheLevel, Notifier, is_allowed, queue_duration, track_limit
 
@@ -145,6 +145,26 @@ class AudioDBAPI:
                         f"POST || Ping {r.headers['x-process-time']} ||"
                         f" Status code {r.status} || {query}"
                     )
+
+
+if TYPE_CHECKING:
+    _database: CacheInterface
+    _bot: Red
+    _config: Config
+else:
+    _database = None
+    _bot = None
+    _config = None
+
+
+def _pass_config_to_apis(config: Config, bot: Red):
+    global _database, _config, _bot
+    if _config is None:
+        _config = config
+    if _bot is None:
+        _bot = bot
+    if _database is None:
+        _database = CacheInterface()
 
 
 class SpotifyAPI:
@@ -425,6 +445,7 @@ class MusicCache:
                     youtube_urls.append(val)
             else:
                 youtube_urls.append(track_info)
+            await asyncio.sleep(0)
             track_count += 1
             if notifier and ((track_count % 2 == 0) or (track_count == total_tracks)):
                 await notifier.notify_user(current=track_count, total=total_tracks, key="youtube")
@@ -739,6 +760,8 @@ class MusicCache:
                     continue
                 track_list.append(single_track)
                 if enqueue:
+                    if len(player.queue) >= 10000:
+                        continue
                     if guild_data["maxlength"] > 0:
                         if track_limit(single_track, guild_data["maxlength"]):
                             enqueued_tracks += 1
@@ -777,16 +800,14 @@ class MusicCache:
                         await player.play()
             if len(track_list) == 0:
                 if not has_not_allowed:
-                    embed3 = discord.Embed(
-                        colour=await ctx.embed_colour(),
-                        title=_(
+                    raise SpotifyFetchError(
+                        message=_(
                             "Nothing found.\nThe YouTube API key may be invalid "
                             "or you may be rate limited on YouTube's search service.\n"
                             "Check the YouTube API key again and follow the instructions "
                             "at `{prefix}audioset youtubeapi`."
-                        ).format(prefix=ctx.prefix),
+                        ).format(prefix=ctx.prefix)
                     )
-                    await ctx.send(embed=embed3)
             player.maybe_shuffle()
             if enqueue and tracks_from_spotify:
                 if total_tracks > enqueued_tracks:
@@ -948,6 +969,8 @@ class MusicCache:
                 results = await player.load_tracks(query)
             except KeyError:
                 results = None
+            except RuntimeError:
+                raise TrackEnqueueError
         if results is None:
             results = LoadResult({"loadType": "LOAD_FAILED", "playlistInfo": {}, "tracks": []})
             valid_global_entry = False

@@ -250,6 +250,7 @@ class CacheInterface:
             if index % 50 == 0:
                 await asyncio.sleep(0.01)
             output.append(CacheGetAllLavalink(*row))
+            await asyncio.sleep(0)
         return output
 
     async def fetch_random(
@@ -434,6 +435,7 @@ class QueueInterface:
             if index % 50 == 0:
                 await asyncio.sleep(0.01)
             output.append(row)
+            await asyncio.sleep(0)
 
         return [QueueFetchResult(*row) for row in output] if output else []
 
@@ -441,7 +443,8 @@ class QueueInterface:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             executor.submit(
                 self.cursor.execute,
-                PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "track_id": track_id}),
+                PERSIST_QUEUE_PLAYED,
+                ({"guild_id": guild_id, "track_id": track_id}),
             )
 
     def delete_scheduled(self):
