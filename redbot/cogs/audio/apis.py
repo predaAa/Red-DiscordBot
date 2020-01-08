@@ -30,26 +30,6 @@ _ = Translator("Audio", __file__)
 _TOP_100_GLOBALS = "https://www.youtube.com/playlist?list=PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i"
 _TOP_100_US = "https://www.youtube.com/playlist?list=PL4fGSI1pDJn5rWitrRWFKdm-ulaFiIyoK"
 
-if TYPE_CHECKING:
-    _database: CacheInterface
-    _bot: Red
-    _config: Config
-else:
-    _database = None
-    _bot = None
-    _config = None
-
-
-def _pass_config_to_apis(config: Config, bot: Red):
-    global _database, _config, _bot
-    if _config is None:
-        _config = config
-    if _bot is None:
-        _bot = bot
-    if _database is None:
-        _database = CacheInterface()
-
-
 class SpotifyAPI:
     """Wrapper for the Spotify API."""
 
