@@ -28,7 +28,7 @@ Then run each of the following commands:
     iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
     choco install git --params "/GitOnlyOnPath /WindowsTerminal" -y
     choco install visualstudio2019-workload-vctools -y
-    choco install python3 --version=3.8.1 -y
+    choco install python3 -y
 
 For Audio support, you should also run the following command before exiting:
 
@@ -98,6 +98,7 @@ Installing Red
 
         python -m pip install -U setuptools wheel
         python -m pip install -U Red-DiscordBot[postgres]
+
 
 --------------------------
 Setting Up and Running Red
