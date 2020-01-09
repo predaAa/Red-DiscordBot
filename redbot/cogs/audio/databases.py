@@ -494,10 +494,15 @@ class QueueInterface:
         with contextlib.suppress(Exception):
             database_connection.close()
 
-    def fetch(self) -> List[QueueFetchResult]:
-        output = self.cursor.execute(PERSIST_QUEUE_FETCH_ALL).fetchall() or []
+    async def fetch(self) -> List[QueueFetchResult]:
+        output = []
+        for index, row in enumerate(self.cursor.execute(PERSIST_QUEUE_FETCH_ALL), start=1):
+            if index % 50 == 0:
+                await asyncio.sleep(0.01)
+            output.append(QueueFetchResult(*row))
+            await asyncio.sleep(0)
 
-        return [QueueFetchResult(*row) for row in output] if output else []
+        return output
 
     def played(self, guild_id: int, track_id: str):
         return self.cursor.execute(
