@@ -157,6 +157,8 @@ class ServerManager:
             if _RE_READY_LINE.search(line):
                 self.ready.set()
                 break
+            if _FAILED_TO_START.search(line):
+                raise RuntimeError(f"Lavalink failed to start: {line.decode().strip()}")
             if self._proc.returncode is not None and lastmessage + 2 < time.time():
                 # Avoid Console spam only print once every 2 seconds
                 lastmessage = time.time()

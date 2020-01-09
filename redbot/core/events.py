@@ -54,9 +54,12 @@ def init_events(bot, cli_flags):
         guilds = len(bot.guilds)
         users = len(set([m for m in bot.get_all_members()]))
 
+        app_info = await bot.application_info()
+        if bot.owner_id is None:
+            bot.owner_id = app_info.owner.id
+
         try:
-            data = await bot.application_info()
-            invite_url = discord.utils.oauth_url(data.id)
+            invite_url = discord.utils.oauth_url(app_info.id)
         except:
             invite_url = "Could not fetch invite url"
 
@@ -81,6 +84,7 @@ def init_events(bot, cli_flags):
 
         INFO.append("{} cogs with {} commands".format(len(bot.cogs), len(bot.commands)))
 
+        outdated_red_message = ""
         with contextlib.suppress(aiohttp.ClientError, discord.HTTPException):
             async with aiohttp.ClientSession() as session:
                 async with session.get("https://pypi.python.org/pypi/red-discordbot/json") as r:
@@ -90,13 +94,10 @@ def init_events(bot, cli_flags):
                     "Outdated version! {} is available "
                     "but you're using {}".format(data["info"]["version"], red_version)
                 )
-
-                await bot.send_to_owners(
+                outdated_red_message = (
                     "Your Red instance is out of date! {} is the current "
-                    "version, however you are using {}!".format(
-                        data["info"]["version"], red_version
-                    )
-                )
+                    "version, however you are using {}!"
+                ).format(data["info"]["version"], red_version)
         INFO2 = []
 
         reqs_installed = {"docs": None, "test": None}
