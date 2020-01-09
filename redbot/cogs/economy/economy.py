@@ -7,6 +7,7 @@ from datetime import datetime
 from collections import defaultdict, deque, namedtuple
 from enum import Enum
 from typing import cast, Iterable, Union
+import math
 
 import discord
 
@@ -637,22 +638,157 @@ class Economy(commands.Cog):
                 await ctx.send(embed=embed)
 
     @commands.command()
-    @guild_only_check()
-    async def leaderboard(self, ctx: commands.Context, top: int = 10, show_global: bool = False):
-        """Print the leaderboard.
-
-        Defaults to top 10.
+    async def daily(self, ctx):
         """
+        Check if you have voted on Top.gg in the last 12 hours and claim your reward
+        """
+        base_url = "https://api.ksoft.si/webhook/dbl/check?user={}&bot=540694922307698690".format(
+            ctx.author.id
+        )
+        headers = {"Authorization": "Bearer 99fd05f73099fa546d937075181edaf0d83c9ab1"}
+        author = ctx.author
+        cur_time = calendar.timegm(ctx.message.created_at.utctimetuple())
+        next_daily = await self.config.user(author).next_daily()
+        guild = ctx.guild
+        credits_name = await bank.get_currency_name(ctx.guild)
+        avatar = author.avatar_url_as(static_format="png")
+        emoji = discord.utils.get(self.bot.emojis, id=605196852647952394)
+        no = discord.utils.get(self.bot.emojis, id=639533861730254848)
+        bonus = random.randint(1000, 1500)
+        async with ctx.typing():
+            async with self.session.get(base_url, headers=headers) as r:
+                if r.status != 200:
+                    print(r.status)
+                    if r.status == 404:
+                        pass
+                    else:
+                        return await ctx.send("The daily vote api is down, please try again later")
+                data = await r.json()  # You might want to check if the API is up also.
+            if data["voted"] is False:
+                embed = discord.Embed(
+                    title="Vote for BB-8 every 12 hours to gain 1000 {currency}".format(
+                        currency=credits_name
+                    ),
+                    description=(
+                        "You haven't voted within the last 12 hours!\n\n [Click here](https://top.gg/bot/540694922307698690/vote)"
+                        f" to vote for BB-8 and then use `{ctx.prefix}daily` to claim your reward"  # Use ctx.prefix to get the prefix used.
+                    ),
+                    color=0xFF0000,
+                )
+                embed.set_thumbnail(url=avatar)
+                embed.set_footer(
+                    text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                )
+                await ctx.send(embed=embed)
+                return
+            # Here you don't need to use an other if statement to check if voted is True, because you used a return at the end when it's False.
+
+            if cur_time >= next_daily:
+                try:
+                    await bank.deposit_credits(author, bonus if data["data"]["weekend"] else 1000)
+                except errors.BalanceTooHigh as exc:
+                    await bank.set_balance(author, exc.max_balance)
+                    embed = discord.Embed(
+                        title="Daily \N{MONEY WITH WINGS}",
+                        description="You've reached the **maximum** amount of {currency}!\n "
+                        "Please spend some more \N{GRIMACING FACE}\n\n"
+                        "You currently have **{new_balance} {currency}.**".format(
+                            currency=credits_name, new_balance=humanize_number(exc.max_balance)
+                        ),
+                        color=0xFF0000,
+                    )
+
+                    embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                    embed.set_footer(
+                        text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                    )
+                    await ctx.send(embed=embed)
+                    return
+
+                next_daily = datetime.strptime(data["data"]["expiry"], "%Y-%m-%dT%H:%M:%S.%f")
+                await self.config.user(author).next_daily.set(int(next_daily.timestamp()))
+                pos = await bank.get_leaderboard_position(author)
+                if data["data"][
+                    "weekend"
+                ]:  # When a value is True, you can just use if with the value you want to check.
+                    embed = discord.Embed(
+                        title="Thanks for your vote {author} {emoji}".format(
+                            author=author, emoji=emoji
+                        ),
+                        description="Here is your daily bonus of {currency}. **WEEKEND BONUS +{bonus}** "
+                        "Enjoy! (**+{amount}** {currency}!)\n\n"
+                        "You currently have **{new_balance} {currency}.**\n\n"
+                        "You are currently **#{pos}** on the global leaderboard!".format(
+                            currency=credits_name,
+                            bonus=bonus,
+                            amount=humanize_number(1000 + bonus),
+                            new_balance=humanize_number(await bank.get_balance(author)),
+                            pos=humanize_number(pos) if pos else pos,
+                        ),
+                        color=0x00FF00,
+                    )
+
+                    embed.set_thumbnail(url=avatar)
+                    embed.set_footer(
+                        text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                    )
+                    await ctx.send(embed=embed)
+                    return
+
+                embed = discord.Embed(
+                    title="Thanks for your vote {author} {emoji}".format(
+                        author=author, emoji=emoji
+                    ),
+                    description="Here is your daily bonus of {currency}."
+                    "Enjoy! (**+{amount}** {currency}!)\n\n"
+                    "You currently have **{new_balance} {currency}.**\n\n"
+                    "You are currently **#{pos}** on the global leaderboard!".format(
+                        currency=credits_name,
+                        amount=humanize_number(1000),
+                        new_balance=humanize_number(await bank.get_balance(author)),
+                        pos=humanize_number(pos) if pos else pos,
+                    ),
+                    color=0x00FF00,
+                )
+                embed.set_thumbnail(url=avatar)
+                embed.set_footer(
+                    text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                )
+                await ctx.send(embed=embed)
+
+            else:
+                dtime = self.display_time(next_daily - cur_time)
+                embed = discord.Embed(
+                    description="{no} {author.mention} Too soon.\n\n You've already claimed your daily reward for voting on [top.gg](https://top.gg/bot/540694922307698690/vote).\n\n"
+                    "You have to wait {time} for your next reward".format(
+                        no=no, author=author, time=dtime
+                    ),
+                    color=0xFF0000,
+                )
+                embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                embed.set_footer(
+                    text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                )
+                await ctx.send(embed=embed)
+
+    @commands.command()
+    @guild_only_check()
+    async def leaderboard(self, ctx: commands.Context):
+        """Print the global leaderboard.
+       """
         guild = ctx.guild
         author = ctx.author
         max_bal = await bank.get_max_balance(ctx.guild)
-        if top < 1:
-            top = 10
-        if await bank.is_global() and show_global:
-            # show_global is only applicable if bank is global
-            bank_sorted = await bank.get_leaderboard(positions=top, guild=None)
-        else:
-            bank_sorted = await bank.get_leaderboard(positions=top, guild=guild)
+        all_accounts = len(await bank._conf.all_users())
+        accounts = await bank._conf.all_users()
+        overall = 0
+        for key, value in accounts.items():
+            overall += value["balance"]
+        overall_total = humanize_number(overall)
+        user_bal = await bank.get_balance(ctx.author)
+        percent = round((int(user_bal) / overall * 100), 3)
+        pos = await bank.get_leaderboard_position(ctx.author)
+        bank_sorted = await bank.get_leaderboard(positions=all_accounts, guild=None)
         try:
             bal_len = len(humanize_number(bank_sorted[0][1]["balance"]))
             bal_len_max = len(humanize_number(max_bal))
@@ -669,45 +805,59 @@ class Economy(commands.Cog):
             bal_len=bal_len + 6,
             pound_len=pound_len + 3,
         )
-        highscores = []
-        pos = 1
+        pages = []
+        total_pages = math.ceil(all_accounts/10)
+        embed = discord.Embed(
+            title="Imperial Bank Leaderboard",
+            color= await ctx.embed_color()
+        )
+        highscores = ""
         temp_msg = header
-        for acc in bank_sorted:
+        for i, acc in enumerate(bank_sorted, start=1):
             try:
                 name = guild.get_member(acc[0]).display_name
             except AttributeError:
                 user_id = ""
                 if await ctx.bot.is_owner(ctx.author):
                     user_id = f"({str(acc[0])})"
-                name = f"{acc[1]['name']} {user_id}"
-
+                name = f"{acc[1]['name']}"
+ 
             balance = acc[1]["balance"]
             if balance > max_bal:
                 balance = max_bal
                 await bank.set_balance(MOCK_MEMBER(acc[0], guild), balance)
             balance = humanize_number(balance)
             if acc[0] != author.id:
-                temp_msg += (
-                    f"{f'{humanize_number(pos)}.': <{pound_len+2}} "
+                highscores += (
+                    f"{f'{humanize_number(i)}.': <{pound_len+2}} "
                     f"{balance: <{bal_len + 5}} {name}\n"
                 )
-
+ 
             else:
-                temp_msg += (
-                    f"{f'{humanize_number(pos)}.': <{pound_len+2}} "
+                highscores += (
+                    f"{f'{humanize_number(i)}.': <{pound_len+2}} "
                     f"{balance: <{bal_len + 5}} "
                     f"<<{author.display_name}>>\n"
                 )
-            if pos % 10 == 0:
-                highscores.append(box(temp_msg, lang="md"))
-                temp_msg = header
-            pos += 1
 
-        if temp_msg != header:
-            highscores.append(box(temp_msg, lang="md"))
-
+            if i % 10 == 0:
+                embed = discord.Embed(
+                title="Imperial Bank Leaderboard\nYou are currently #{}/{}".format(pos, all_accounts),
+                color= await ctx.embed_color(),
+                description="```md\n{}``` ```md\n{}``` ```py\nTotal bank amount {}\nYou have {}% of the total amount!```".format(header, highscores, overall_total, percent))
+                embed.set_footer(text=f"Page {i//10}/{total_pages}")
+                pages.append(embed)
+                highscores = ""
         if highscores:
-            await menu(ctx, highscores, DEFAULT_CONTROLS)
+            embed = discord.Embed(
+                    title="Imperial Bank Leaderboard",
+                    color= await ctx.embed_color(),
+                    description="```md\n{}``` ```md\n{}``` ```py\nTotal bank amount {}\nYou have {}% of the total amount!```".format(header, highscores, overall_total, percent))
+            embed.set_footer(text=f"Page {i//10}/{total_pages}")
+            pages.append(embed)
+ 
+        if pages:
+            return await menu(ctx, pages, DEFAULT_CONTROLS)
 
     @commands.command()
     @guild_only_check()
