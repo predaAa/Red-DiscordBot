@@ -25,12 +25,7 @@ from . import audio_dataclasses
 from .databases import CacheGetAllLavalink, CacheInterface, QueueInterface, SQLError
 from .debug import debug_exc_log
 
-from .errors import (
-    DatabaseError,
-    SpotifyFetchError,
-    TrackEnqueueError,
-    YouTubeApiError,
-)
+from .errors import DatabaseError, SpotifyFetchError, TrackEnqueueError, YouTubeApiError
 from .playlists import get_playlist
 from .utils import CacheLevel, Notifier, is_allowed, queue_duration, track_limit
 

@@ -156,7 +156,7 @@ class CacheInterface:
         maxage = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=max_age)
         maxage_int = int(time.mktime(maxage.timetuple()))
         values = {"maxage": maxage_int}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             executor.submit(self.database.execute, LAVALINK_DELETE_OLD_ENTRIES, values)
             executor.submit(self.database.execute, YOUTUBE_DELETE_OLD_ENTRIES, values)
             executor.submit(self.database.execute, SPOTIFY_DELETE_OLD_ENTRIES, values)
@@ -221,6 +221,7 @@ class CacheInterface:
             if index % 50 == 0:
                 await asyncio.sleep(0.01)
             output.append(CacheLastFetchResult(*row))
+            await asyncio.sleep(0)
         return output
 
     async def fetch_random(
@@ -265,10 +266,10 @@ class CacheInterface:
         return CacheLastFetchResult(*row)
 
     async def fetch_all_for_global(self) -> List[CacheGetAllLavalink]:
-        return [
-            CacheGetAllLavalink(*row)
-            for row in self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL).fetchall()
-        ]
+        output = []
+        for row in self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL):
+            output.append(CacheGetAllLavalink(*row))
+        return output
 
 
 class PlaylistInterface:
@@ -322,7 +323,8 @@ class PlaylistInterface:
             ):
                 if index % 50 == 0:
                     await asyncio.sleep(0.01)
-                output.append(row)
+                output.append(PlaylistFetchResult(*row))
+                await asyncio.sleep(0)
         else:
             output = []
             for index, row in enumerate(
@@ -333,8 +335,9 @@ class PlaylistInterface:
             ):
                 if index % 50 == 0:
                     await asyncio.sleep(0.01)
-                output.append(row)
-        return [PlaylistFetchResult(*row) for row in output] if output else []
+                output.append(PlaylistFetchResult(*row))
+                await asyncio.sleep(0)
+        return output
 
     async def fetch_all_converter(
         self, scope: str, playlist_name, playlist_id
@@ -361,8 +364,9 @@ class PlaylistInterface:
         ):
             if index % 50 == 0:
                 await asyncio.sleep(0.01)
-            output.append(row)
-        return [PlaylistFetchResult(*row) for row in output] if output else []
+            output.append(PlaylistFetchResult(*row))
+            await asyncio.sleep(0)
+        return output
 
     def delete(self, scope: str, playlist_id: int, scope_id: int):
         scope_type = self.get_scope_type(scope)
@@ -434,17 +438,17 @@ class QueueInterface:
         for index, row in enumerate(self.cursor.execute(PERSIST_QUEUE_FETCH_ALL), start=1):
             if index % 50 == 0:
                 await asyncio.sleep(0.01)
-            output.append(row)
+            output.append(QueueFetchResult(*row))
             await asyncio.sleep(0)
 
-        return [QueueFetchResult(*row) for row in output] if output else []
+        return output
 
     def played(self, guild_id: int, track_id: str):
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             executor.submit(
                 self.cursor.execute,
                 PERSIST_QUEUE_PLAYED,
-                ({"guild_id": guild_id, "track_id": track_id}),
+                {"guild_id": guild_id, "track_id": track_id},
             )
 
     def delete_scheduled(self):
@@ -467,63 +471,6 @@ class QueueInterface:
             executor.submit(
                 self.cursor.execute,
                 PERSIST_QUEUE_UPSERT,
-                (
-                    {
-                        "guild_id": int(guild_id),
-                        "room_id": int(room_id),
-                        "played": False,
-                        "time": enqueue_time,
-                        "track": json.dumps(track),
-                        "track_id": track_identifier,
-                    }
-                ),
-            )
-
-
-class QueueInterface:
-    def __init__(self):
-        self.cursor = database_connection.cursor()
-        self.cursor.execute(PRAGMA_SET_temp_store)
-        self.cursor.execute(PRAGMA_SET_journal_mode)
-        self.cursor.execute(PRAGMA_SET_read_uncommitted)
-        self.cursor.execute(PERSIST_QUEUE_CREATE_TABLE)
-        self.cursor.execute(PERSIST_QUEUE_CREATE_INDEX)
-
-    @staticmethod
-    def close():
-        with contextlib.suppress(Exception):
-            database_connection.close()
-
-    async def fetch(self) -> List[QueueFetchResult]:
-        output = []
-        for index, row in enumerate(self.cursor.execute(PERSIST_QUEUE_FETCH_ALL), start=1):
-            if index % 50 == 0:
-                await asyncio.sleep(0.01)
-            output.append(QueueFetchResult(*row))
-            await asyncio.sleep(0)
-
-        return output
-
-    def played(self, guild_id: int, track_id: str):
-        return self.cursor.execute(
-            PERSIST_QUEUE_PLAYED, ({"guild_id": guild_id, "track_id": track_id})
-        )
-
-    def delete_scheduled(self):
-        return self.cursor.execute(PERSIST_QUEUE_DELETE_SCHEDULED)
-
-    def drop(self, guild_id: int):
-        return self.cursor.execute(PERSIST_QUEUE_BULK_PLAYED, ({"guild_id": guild_id}))
-
-    def enqueued(self, guild_id: int, room_id: int, track: lavalink.Track):
-        enqueue_time = track.extras.get("enqueue_time", 0)
-        if enqueue_time == 0:
-            track.extras["enqueue_time"] = int(time.time())
-        track_identifier = track.track_identifier
-        track = track_to_json(track)
-        self.cursor.execute(
-            PERSIST_QUEUE_UPSERT,
-            (
                 {
                     "guild_id": int(guild_id),
                     "room_id": int(room_id),
@@ -531,6 +478,5 @@ class QueueInterface:
                     "time": enqueue_time,
                     "track": json.dumps(track),
                     "track_id": track_identifier,
-                }
-            ),
-        )
+                },
+            )
