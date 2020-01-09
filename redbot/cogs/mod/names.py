@@ -145,7 +145,9 @@ class ModInfo(MixinMeta):
                 cstatus = None
                 pass
         elif user.activity.type == discord.ActivityType.listening:
-            activity = _("Listening to ``{} by {} on {}``").format(user.activity.title, user.activity.artist, user.activity.name)
+            activity = _("Listening to ``{} by {} on {}``").format(
+                user.activity.title, user.activity.artist, user.activity.name
+            )
             try:
                 cstatus = user.activities[1].state
             except:
@@ -164,7 +166,6 @@ class ModInfo(MixinMeta):
             except:
                 cstatus = None
                 pass
-                
 
         if roles:
 
@@ -205,7 +206,9 @@ class ModInfo(MixinMeta):
         if cstatus is None:
             data = discord.Embed(description="{}".format(activity), colour=user.colour)
         else:
-            data = discord.Embed(description="{}\nCustom Status: {}".format(activity, cstatus), colour=user.colour)
+            data = discord.Embed(
+                description="{}\nCustom Status: {}".format(activity, cstatus), colour=user.colour
+            )
         data.add_field(name=_("Joined Discord on"), value=created_on)
         data.add_field(name=_("Joined this server on"), value=joined_on)
         if role_str is not None:

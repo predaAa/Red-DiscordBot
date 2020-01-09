@@ -223,4 +223,3 @@ class General(commands.Cog):
             # For the purposes of "msg might not be defined" linter errors
             raise RuntimeError
         await ctx.send(msg)
-

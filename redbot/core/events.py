@@ -130,17 +130,22 @@ def init_events(bot, cli_flags):
             print("\nInvite URL: {}\n".format(invite_url))
 
         bot._color = discord.Colour(await bot._config.color())
+        bot._red_ready.set()
+        if outdated_red_message:
+            await bot.send_to_owners(outdated_red_message)
+
         menus.update_controls(bot)
         bot.launch_time = abs(bot.launch_time - int(time.perf_counter()))
         humanized_launch_time = humanize_timedelta(seconds=bot.launch_time) or "1 second"
         chan = bot.get_guild(489162733791739950).get_channel(646857954175221810)
         embed = discord.Embed(
-            description=("\N{WHITE HEAVY CHECK MARK} **BB-8 is Up and ready for use!**\n\nLaunch Time: **{}**").format(humanized_launch_time),
-            color = 0x00FF00
+            description=(
+                "\N{WHITE HEAVY CHECK MARK} **BB-8 is Up and ready for use!**\n\nLaunch Time: **{}**"
+            ).format(humanized_launch_time),
+            color=0x00FF00,
         )
         await chan.send(embed=embed)
         await bot.change_presence(status=discord.Status.online, activity=None)
-
 
     @bot.event
     async def on_command_error(ctx, error, unhandled_by_cog=False):
@@ -185,7 +190,7 @@ def init_events(bot, cli_flags):
             )
             message += "```" + "\n"
             message += "Use the ``b!support`` command \nThen join the support server and the owner of the bot or a mod will help you when they are available"
-            
+
             exception_log = "Exception in command '{}'\n" "".format(ctx.command.qualified_name)
             exception_log += "".join(
                 traceback.format_exception(type(error), error, error.__traceback__)
@@ -303,7 +308,7 @@ def init_events(bot, cli_flags):
 
     @bot.event
     async def on_socket_response(msg):
-        bot.socket_stats[msg.get('t')] += 1
+        bot.socket_stats[msg.get("t")] += 1
 
 
 def _get_startup_screen_specs():

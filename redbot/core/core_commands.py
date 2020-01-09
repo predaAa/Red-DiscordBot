@@ -332,7 +332,6 @@ class Core(commands.Cog, CoreLogic):
             "created by [Twentysix]({}) and [improved by many]({}).\n\n"
             "Please do not bother Red Support for issues with my bot as they will not be able to help you. "
             "For support with this bot please join my support [discord server]({})\n\n"
-            
             "This fork has numerous modifications to core Red. Some may get merged into "
             "the main project via PR at a later date, but most changes are custom for {}\n\n"
             "Orginal Copyright to (c) Cog Creators"
@@ -341,22 +340,29 @@ class Core(commands.Cog, CoreLogic):
 
         embed = discord.Embed(color=(await ctx.embed_colour()))
         embed.set_thumbnail(url=ctx.bot.user.avatar_url_as(static_format="png"))
-        embed.add_field(name="\N{HAMMER AND WRENCH}""Instance owned by", value=str(owner))
-        embed.add_field(name="\N{GEAR}""Libraries", value="Python: {} \nDiscord.py {} \nRed Version: {}".format(python_version, dpy_version, red_version))
-        
+        embed.add_field(name="\N{HAMMER AND WRENCH}" "Instance owned by", value=str(owner))
+        embed.add_field(
+            name="\N{GEAR}" "Libraries",
+            value="Python: {} \nDiscord.py {} \nRed Version: {}".format(
+                python_version, dpy_version, red_version
+            ),
+        )
+
         if outdated:
             embed.add_field(
                 name=_("Outdated"), value=_("Yes, {} is available").format(data["info"]["version"])
             )
         if custom_info:
             embed.add_field(name="About this instance", value=custom_info, inline=False)
-        embed.add_field(name="\N{PUSHPIN}""About {}".format(ctx.bot.user.name), value=about, inline=False)
+        embed.add_field(
+            name="\N{PUSHPIN}" "About {}".format(ctx.bot.user.name), value=about, inline=False
+        )
 
         embed.set_image(url="https://i.imgur.com/BLClEw2.png")
 
         embed.set_footer(
             text="Bringing joy since 02 Jan 2016 (over {} days ago!)".format(days_since),
-            icon_url="https://images-ext-2.discordapp.net/external/tlTHs8liCJaeXY6qdrHUrdMft6nQCaGctzbEdUxP4QU/%3Fsize%3D1024/https/cdn.discordapp.com/icons/133049272517001216/a_aab012f3206eb514cac0432182e9e9ec.gif"
+            icon_url="https://images-ext-2.discordapp.net/external/tlTHs8liCJaeXY6qdrHUrdMft6nQCaGctzbEdUxP4QU/%3Fsize%3D1024/https/cdn.discordapp.com/icons/133049272517001216/a_aab012f3206eb514cac0432182e9e9ec.gif",
         )
         try:
             await ctx.send(embed=embed)
@@ -380,7 +386,7 @@ class Core(commands.Cog, CoreLogic):
             ]
         )
         return phrases
-    
+
     @commands.command()
     async def uptime(self, ctx: commands.Context):
         """Shows Red's uptime"""
@@ -2337,13 +2343,16 @@ class Core(commands.Cog, CoreLogic):
         embed = discord.Embed(
             title="BB-8 Credits",
             description="Credits for all of the people who have made various cogs for the bot and have helped to make it what is is today!",
-            color = await ctx.embed_color(),
+            color=await ctx.embed_color(),
         )
-        embed.add_field(name="Red Discord Bot:", value="BB-8 is a custom fork of [Red, an open source Discord bot]({}) "
-                            "created by [Twentysix]({}) and [improved by many]({}).\n\n"
-                            "To run your own instance of red checkout the docs at https://red-discordbot.readthedocs.io/en/stable/index.html".format(
-                                red_repo, author_repo, org_repo)
-                        )
+        embed.add_field(
+            name="Red Discord Bot:",
+            value="BB-8 is a custom fork of [Red, an open source Discord bot]({}) "
+            "created by [Twentysix]({}) and [improved by many]({}).\n\n"
+            "To run your own instance of red checkout the docs at https://red-discordbot.readthedocs.io/en/stable/index.html".format(
+                red_repo, author_repo, org_repo
+            ),
+        )
         embed.add_field(
             name="Cog Creators:",
             value=(
@@ -2359,9 +2368,10 @@ class Core(commands.Cog, CoreLogic):
                 "**Flapjack** https://github.com/flapjax/FlapJack-Cogs\n"
                 "**Flare** https://github.com/flaree/Flare-Cogs\n"
                 "**Grande** https://github.com/HarukiGrande/GrandeCogs-V3\n"
-                "**Jintaku** https://github.com/Jintaku/Jintaku-Cogs-V3\n"),
-            inline=False
-            )
+                "**Jintaku** https://github.com/Jintaku/Jintaku-Cogs-V3\n"
+            ),
+            inline=False,
+        )
         embed.add_field(
             name="Cog Creators Cont.:",
             value=(
@@ -2375,10 +2385,14 @@ class Core(commands.Cog, CoreLogic):
                 "**tmerc** https://github.com/tmercswims/tmerc-cogs\n"
                 "**Tobotimus** https://github.com/Tobotimus/Tobo-Cogs\n"
                 "**Trusty** https://github.com/TrustyJAID/Trusty-cogs/\n"
-                "**Wyn** https://github.com/Wyn10/Wyn-RedV3Cogs"),
-            inline=False
-            )
-        embed.add_field(name="Contributors", value="Predä - 尝试赢。#1001\nFlame#2941\nNeuro Assassin#4779\naikaterna#1393\nDraper#6666")
+                "**Wyn** https://github.com/Wyn10/Wyn-RedV3Cogs"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Contributors",
+            value="Predä - 尝试赢。#1001\nFlame#2941\nNeuro Assassin#4779\naikaterna#1393\nDraper#6666",
+        )
         embed.set_thumbnail(url=ctx.bot.user.avatar_url_as(static_format="png"))
         await ctx.send(embed=embed)
 

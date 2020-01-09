@@ -119,7 +119,7 @@ class SetParser:
 @cog_i18n(_)
 class Economy(commands.Cog):
     """Get rich and have fun with imaginary currency!"""
-    
+
     default_guild_settings = {
         "PAYDAY_TIME": 300,
         "PAYDAY_CREDITS": 120,
@@ -262,6 +262,7 @@ class Economy(commands.Cog):
                     scope=self.bot.user.name if await bank.is_global() else _("this server")
                 )
             )
+
     @_bank.command()
     @checks.is_owner()
     async def tagline(self, ctx, embedtagline):
@@ -270,7 +271,6 @@ class Economy(commands.Cog):
         """
         await self.config.embed_tagline.set(embedtagline)
         await ctx.send("Embed tagline set")
-    
 
     @_bank.group(name="prune")
     @check_global_setting_admin()
@@ -373,16 +373,17 @@ class Economy(commands.Cog):
                 except errors.BalanceTooHigh as exc:
                     await bank.set_balance(author, exc.max_balance)
                     embed = discord.Embed(
-                        title="PAYDAY \N{MONEY BAG}", description="You've reached the **maximum** amount of {currency}!\n "
-                            "Please spend some more \N{GRIMACING FACE}\n\n"
-                            "You currently have **{new_balance} {currency}.**"
-                        .format(currency=credits_name, new_balance=humanize_number(exc.max_balance)), color= await ctx.embed_color()
+                        title="PAYDAY \N{MONEY BAG}",
+                        description="You've reached the **maximum** amount of {currency}!\n "
+                        "Please spend some more \N{GRIMACING FACE}\n\n"
+                        "You currently have **{new_balance} {currency}.**".format(
+                            currency=credits_name, new_balance=humanize_number(exc.max_balance)
+                        ),
+                        color=await ctx.embed_color(),
                     )
 
                     embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
-                    embed.set_footer(
-                        text="{}".format(embed_tagline)
-                    )
+                    embed.set_footer(text="{}".format(embed_tagline))
                     await ctx.send(embed=embed)
                     return
                 next_payday = cur_time + await self.config.PAYDAY_TIME()
@@ -392,55 +393,55 @@ class Economy(commands.Cog):
                 dtime = self.display_time(next_daily - cur_time)
                 if cur_time > next_daily:
                     embed = discord.Embed(
-                            title="PAYDAY \N{MONEY BAG}", description="{author.mention} Here, take some {currency}. "
-                                "Enjoy! (**+{amount}** {currency}!)\n\n"
-                                "You currently have **{new_balance} {currency}.**\n\n"
-                                "You are currently **#{pos}** on the global leaderboard!\n\n"
-                                "**Don't forget to use the ``b!daily`` for your daily bonus!**\n\n"
-                                "Next daily bonus available now"
-                            .format(
+                        title="PAYDAY \N{MONEY BAG}",
+                        description="{author.mention} Here, take some {currency}. "
+                        "Enjoy! (**+{amount}** {currency}!)\n\n"
+                        "You currently have **{new_balance} {currency}.**\n\n"
+                        "You are currently **#{pos}** on the global leaderboard!\n\n"
+                        "**Don't forget to use the ``b!daily`` for your daily bonus!**\n\n"
+                        "Next daily bonus available now".format(
                             author=author,
                             currency=credits_name,
-                            amount= humanize_number(depamount),
+                            amount=humanize_number(depamount),
                             new_balance=humanize_number(await bank.get_balance(author)),
                             pos=humanize_number(pos) if pos else pos,
-                        ), color= await ctx.embed_color()
+                        ),
+                        color=await ctx.embed_color(),
                     )
 
                     embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
-                    embed.set_footer(
-                        text="{}".format(embed_tagline)
-                    )
+                    embed.set_footer(text="{}".format(embed_tagline))
                     await ctx.send(embed=embed)
                 else:
                     embed = discord.Embed(
-                            title="PAYDAY \N{MONEY BAG}", description="{author.mention} Here, take some {currency}. "
-                                "Enjoy! (**+{amount}** {currency}!)\n\n"
-                                "You currently have **{new_balance} {currency}.**\n\n"
-                                "You are currently **#{pos}** on the global leaderboard!\n\n"
-                                "**Don't forget to use the ``b!daily`` for your daily bonus!**\n\n"
-                                "Next daily bonus available in {time}"
-                            .format(
+                        title="PAYDAY \N{MONEY BAG}",
+                        description="{author.mention} Here, take some {currency}. "
+                        "Enjoy! (**+{amount}** {currency}!)\n\n"
+                        "You currently have **{new_balance} {currency}.**\n\n"
+                        "You are currently **#{pos}** on the global leaderboard!\n\n"
+                        "**Don't forget to use the ``b!daily`` for your daily bonus!**\n\n"
+                        "Next daily bonus available in {time}".format(
                             author=author,
                             currency=credits_name,
-                            amount= humanize_number(depamount),
+                            amount=humanize_number(depamount),
                             new_balance=humanize_number(await bank.get_balance(author)),
                             pos=humanize_number(pos) if pos else pos,
-                            time = dtime,
-                        ), color= await ctx.embed_color()
+                            time=dtime,
+                        ),
+                        color=await ctx.embed_color(),
                     )
 
                     embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
-                    embed.set_footer(
-                        text="{}".format(embed_tagline)
-                    )
+                    embed.set_footer(text="{}".format(embed_tagline))
                     await ctx.send(embed=embed)
-                
+
             else:
                 dtime = self.display_time(next_payday - cur_time)
                 embed = discord.Embed(
-                    description="\N{CROSS MARK} {author.mention} Too soon.\n\n For your next payday you have to wait {time}."
-                    .format(author=author, time=dtime), color= await ctx.embed_color()
+                    description="\N{CROSS MARK} {author.mention} Too soon.\n\n For your next payday you have to wait {time}.".format(
+                        author=author, time=dtime
+                    ),
+                    color=await ctx.embed_color(),
                 )
                 embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
                 await ctx.send(embed=embed)
@@ -459,16 +460,16 @@ class Economy(commands.Cog):
                 except errors.BalanceTooHigh as exc:
                     await bank.set_balance(author, exc.max_balance)
                     embed = discord.Embed(
-                        title="PAYDAY \N{MONEY BAG}", description="You've reached the **maximum** amount of {currency}!\n "
-                            "Please spend some more \N{GRIMACING FACE}\n\n"
-                            "You currently have **{new_balance} {currency}.**"
-                        .format(currency=credits_name, new_balance=humanize_number(exc.max_balance)), 
-                        color= await ctx.embed_color()
+                        title="PAYDAY \N{MONEY BAG}",
+                        description="You've reached the **maximum** amount of {currency}!\n "
+                        "Please spend some more \N{GRIMACING FACE}\n\n"
+                        "You currently have **{new_balance} {currency}.**".format(
+                            currency=credits_name, new_balance=humanize_number(exc.max_balance)
+                        ),
+                        color=await ctx.embed_color(),
                     )
                     embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
-                    embed.set_footer(
-                        text="{}".format(embed_tagline)
-                    )
+                    embed.set_footer(text="{}".format(embed_tagline))
                     await ctx.send(embed=embed)
                     return
                 next_payday = cur_time + await self.config.guild(guild).PAYDAY_TIME()
@@ -476,35 +477,34 @@ class Economy(commands.Cog):
                 pos = await bank.get_leaderboard_position(author)
                 dtime = self.display_time(next_daily - cur_time)
                 embed = discord.Embed(
-                    title="PAYDAY \N{MONEY BAG}", description="{author.mention} Here, take some {currency}. "
-                        "Enjoy! (**+{amount}** {currency}!)\n\n"
-                        "You currently have **{new_balance} {currency}.**\n\n"
-                        "You are currently **#{pos}** on the global leaderboard!\n\n"
-                        "**Don't forget to use ``b!daily`` for your daily bonus!**\n\n"
-                        "Next daily bonus available in {time}"
-                    .format(
+                    title="PAYDAY \N{MONEY BAG}",
+                    description="{author.mention} Here, take some {currency}. "
+                    "Enjoy! (**+{amount}** {currency}!)\n\n"
+                    "You currently have **{new_balance} {currency}.**\n\n"
+                    "You are currently **#{pos}** on the global leaderboard!\n\n"
+                    "**Don't forget to use ``b!daily`` for your daily bonus!**\n\n"
+                    "Next daily bonus available in {time}".format(
                         author=author,
                         currency=credits_name,
                         amount=humanize_number(depamount),
                         new_balance=humanize_number(await bank.get_balance(author)),
                         pos=humanize_number(pos) if pos else pos,
-                        time = dtime
-                    ), color= await ctx.embed_color()
+                        time=dtime,
+                    ),
+                    color=await ctx.embed_color(),
                 )
                 embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
-                embed.set_footer(
-                    text="{}".format(embed_tagline)
-                )
+                embed.set_footer(text="{}".format(embed_tagline))
                 await ctx.send(embed=embed)
             else:
                 dtime = self.display_time(next_payday - cur_time)
                 embed = discord.Embed(
-                    description="\N{CROSS MARK} {author.mention} Too soon.\n\n For your next payday you have to wait {time}."
-                    .format(author=author, time=dtime), color= await ctx.embed_color()
+                    description="\N{CROSS MARK} {author.mention} Too soon.\n\n For your next payday you have to wait {time}.".format(
+                        author=author, time=dtime
+                    ),
+                    color=await ctx.embed_color(),
                 )
-                embed.set_footer(
-                    text="{}".format(embed_tagline)
-                )                
+                embed.set_footer(text="{}".format(embed_tagline))
                 await ctx.send(embed=embed)
 
     @commands.command()
@@ -578,7 +578,9 @@ class Economy(commands.Cog):
                 next_daily = datetime.strptime(data["data"]["expiry"], "%Y-%m-%dT%H:%M:%S.%f")
                 await self.config.user(author).next_daily.set(int(next_daily.timestamp()))
                 pos = await bank.get_leaderboard_position(author)
-                if data["data"]["weekend"]:  # When a value is True, you can just use if with the value you want to check.
+                if data["data"][
+                    "weekend"
+                ]:  # When a value is True, you can just use if with the value you want to check.
                     embed = discord.Embed(
                         title="Thanks for your vote {author} {emoji}".format(
                             author=author, emoji=emoji
@@ -604,7 +606,9 @@ class Economy(commands.Cog):
                     return
 
                 embed = discord.Embed(
-                    title="Thanks for your vote {author} {emoji}".format(author=author, emoji=emoji),
+                    title="Thanks for your vote {author} {emoji}".format(
+                        author=author, emoji=emoji
+                    ),
                     description="Here is your daily bonus of {currency}."
                     "Enjoy! (**+{amount}** {currency}!)\n\n"
                     "You currently have **{new_balance} {currency}.**\n\n"
@@ -768,7 +772,7 @@ class Economy(commands.Cog):
         await self.slot_machine(author, channel, bid)
 
     @staticmethod
-    async def slot_machine(author, channel, bid,):
+    async def slot_machine(author, channel, bid):
         default_reel = deque(cast(Iterable, SMReel))
         reels = []
         for i in range(3):
@@ -787,7 +791,7 @@ class Economy(commands.Cog):
             if i == 1:
                 sign = "║◄"
             slot += "║ {} ¦ {} ¦ {} {}\n".format(
-                *[c.value for c in row], sign   # pylint: disable=no-member
+                *[c.value for c in row], sign  # pylint: disable=no-member
             )
 
         payout = PAYOUTS.get(rows[1])
@@ -814,13 +818,14 @@ class Economy(commands.Cog):
             except errors.BalanceTooHigh as exc:
                 await bank.set_balance(author, exc.max_balance)
                 embed = discord.Embed(
-                        title="Imperial Casino \N{SLOT MACHINE}", description="You've reached the **maximum** amount of {currency}!\n\n "
-                            "Please spend some more \N{GRIMACING FACE}\n\n**{old_balance}** -> **{new_balance}**!"
-                        .format(
+                    title="Imperial Casino \N{SLOT MACHINE}",
+                    description="You've reached the **maximum** amount of {currency}!\n\n "
+                    "Please spend some more \N{GRIMACING FACE}\n\n**{old_balance}** -> **{new_balance}**!".format(
                         currency=await bank.get_currency_name(getattr(channel, "guild", None)),
                         old_balance=humanize_number(then),
                         new_balance=humanize_number(exc.max_balance),
-                    ), color= 0x49ff00
+                    ),
+                    color=0x49FF00,
                 )
                 embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
                 embed.set_footer(
@@ -828,7 +833,7 @@ class Economy(commands.Cog):
                 )
                 await channel.send(embed=embed)
                 return
-                    
+
             phrase = T_(payout["phrase"])
         else:
             then = await bank.get_balance(author)
@@ -838,25 +843,25 @@ class Economy(commands.Cog):
         embed = discord.Embed(
             title="Imperial Casino \N{SLOT MACHINE}",
             description="{slot}".format(slot=slot),
-            color = 0x49ff00
+            color=0x49FF00,
         )
         embed.add_field(
             name="Slot Payout",
             value="{author.mention} **{phrase}**\n\n"
-                "Your bid: **{bid}**"
-                "\n\n**{old_balance}** - {bid} (Your bid) + {pay} (Winnings) → **{new_balance}!**".format(
+            "Your bid: **{bid}**"
+            "\n\n**{old_balance}** - {bid} (Your bid) + {pay} (Winnings) → **{new_balance}!**".format(
                 author=author,
                 phrase=phrase,
                 bid=humanize_number(bid),
                 old_balance=humanize_number(then),
                 new_balance=humanize_number(now),
                 pay=humanize_number(pay),
-                )
+            ),
         )
         embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
         embed.set_footer(
             text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
-                )
+        )
         await channel.send(embed=embed)
 
     @commands.group()

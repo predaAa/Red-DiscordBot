@@ -254,7 +254,7 @@ def start_adding_reactions(
 
     """
     new_emojis = update_icon_adding(message, emojis)
-    
+
     async def task():
         # The task should exit silently if the message is deleted
         with contextlib.suppress(discord.NotFound):

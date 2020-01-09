@@ -31,6 +31,7 @@ BUNDLED_APP_YML = pathlib.Path(__file__).parent / "data" / "application.yml"
 LAVALINK_APP_YML = LAVALINK_DOWNLOAD_DIR / "application.yml"
 
 _RE_READY_LINE = re.compile(rb"Started Launcher in \S+ seconds")
+_FAILED_TO_START = re.compile(rb"Web server failed to start. (.*)")
 _RE_BUILD_LINE = re.compile(rb"Build:\s+(?P<build>\d+)")
 _RE_JAVA_VERSION_LINE = re.compile(
     r'version "(?P<major>\d+).(?P<minor>\d+).\d+(?:_\d+)?(?:-[A-Za-z0-9]+)?"'
