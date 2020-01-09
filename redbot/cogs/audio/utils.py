@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import functools
 import re
+import tarfile
 import time
 from enum import Enum, unique
 from typing import MutableMapping, Optional, TYPE_CHECKING

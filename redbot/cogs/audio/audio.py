@@ -5,9 +5,11 @@ import heapq
 import itertools
 import json
 import logging
+import tarfile
 import math
 import random
 import re
+import os.path
 import time
 import traceback
 from collections import Counter, namedtuple
@@ -49,6 +51,7 @@ from .errors import (
     QueryUnauthorized,
     SpotifyFetchError,
     TooManyMatches,
+    TrackEnqueueError,
 )
 from .manager import ServerManager
 from .playlists import (
@@ -123,6 +126,7 @@ class Audio(commands.Cog):
             persist_queue=True,
             dj_enabled=False,
             dj_role=None,
+            daily_playlists=False,
             emptydc_enabled=False,
             emptydc_timer=0,
             emptypause_enabled=False,
@@ -227,7 +231,7 @@ class Audio(commands.Cog):
 
     async def _migrate_config(self, from_version: int, to_version: int) -> None:
         database_entries = []
-        time_now = str(datetime.datetime.now(datetime.timezone.utc))
+        time_now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
         if from_version == to_version:
             return
         if from_version < 2 <= to_version:
@@ -257,8 +261,10 @@ class Audio(commands.Cog):
                                         "last_fetched": time_now,
                                     }
                                 )
+                        await asyncio.sleep(0)
                     if guild_playlist:
                         all_playlist[str(guild_id)] = guild_playlist
+                await asyncio.sleep(0)
             await self.config.custom(PlaylistScope.GUILD.value).set(all_playlist)
             # new schema is now in place
             await self.config.schema_version.set(_SCHEMA_VERSION)
@@ -2589,6 +2595,7 @@ class Audio(commands.Cog):
                 search_list.extend(
                     [i.track.to_string_user() for i in to_search if i.track.name == track_match]
                 )
+            await asyncio.sleep(0)
         return search_list
 
     @commands.command()
@@ -2754,6 +2761,7 @@ class Audio(commands.Cog):
         for track in queue_tracks:
             req_username = "{}#{}".format(track.requester.name, track.requester.discriminator)
             await _usercount(req_username)
+            await asyncio.sleep(0)
 
         try:
             req_username = "{}#{}".format(
@@ -2768,6 +2776,7 @@ class Audio(commands.Cog):
                 requesters["total"]
             )
             requesters["users"][req_username]["percent"] = round(percentage * 100, 1)
+            await asyncio.sleep(0)
 
         top_queue_users = heapq.nlargest(
             20,
@@ -3248,6 +3257,7 @@ class Audio(commands.Cog):
                 ctx, category_list, page_num, _("Categories")
             )
             category_search_page_list.append(embed)
+            await asyncio.sleep(0)
         cat_menu_output = await menu(ctx, category_search_page_list, category_search_controls)
         if not cat_menu_output:
             return await self._embed_msg(ctx, title=_("No categories selected, try again later."))
@@ -3268,6 +3278,7 @@ class Audio(commands.Cog):
                 playlist=True,
             )
             playlists_search_page_list.append(embed)
+            await asyncio.sleep(0)
         playlists_pick = await menu(ctx, playlists_search_page_list, playlist_search_controls)
         query = audio_dataclasses.Query.process_input(playlists_pick)
         if not query.valid:
@@ -3327,6 +3338,7 @@ class Audio(commands.Cog):
             else:
                 name = f"{list(entry.keys())[0]}"
             search_list += "`{}.` {}\n".format(search_track_num, name)
+            await asyncio.sleep(0)
 
         embed = discord.Embed(
             colour=await ctx.embed_colour(), title=title, description=search_list
@@ -3398,6 +3410,10 @@ class Audio(commands.Cog):
                 ctx,
                 title=_("Unable To Play Tracks"),
                 description=_("You must be in the voice channel to use the autoplay command."),
+            )
+        if len(player.queue) >= 10000:
+            return await self._embed_msg(
+                ctx, title=_("Unable To Play Tracks"), description=_("Queue size limit reached.")
             )
         if not await self._currency_check(ctx, guild_data["jukebox_price"]):
             return
@@ -3545,6 +3561,7 @@ class Audio(commands.Cog):
             self._play_lock(ctx, True)
         guild_data = await self.config.guild(ctx.guild).all()
         first_track_only = False
+        single_track = None
         index = None
         playlist_data = None
         playlist_url = None
@@ -3559,7 +3576,17 @@ class Audio(commands.Cog):
                 index = query.track_index
                 if query.start_time:
                     seek = query.start_time
-            result, called_api = await self.music_cache.lavalink_query(ctx, player, query)
+            try:
+                result, called_api = await self.music_cache.lavalink_query(ctx, player, query)
+            except TrackEnqueueError:
+                self._play_lock(ctx, False)
+                return await self._embed_msg(
+                    ctx,
+                    title=_("Unable to Get Track"),
+                    description=_(
+                        "I'm unable get a track from Lavalink at the moment, try again in a few minutes."
+                    ),
+                )
             tracks = result.tracks
             playlist_data = result.playlist_info
             if not enqueue:
@@ -3599,9 +3626,13 @@ class Audio(commands.Cog):
             # this is a Spotify playlist already made into a list of Tracks or a
             # url where Lavalink handles providing all Track objects to use, like a
             # YouTube or Soundcloud playlist
+            if len(player.queue) >= 10000:
+                return await self._embed_msg(ctx, title=_("Queue size limit reached."))
             track_len = 0
             empty_queue = not player.queue
             for track in tracks:
+                if len(player.queue) >= 10000:
+                    continue
                 if not await is_allowed(
                     ctx.guild,
                     (
@@ -3639,6 +3670,7 @@ class Audio(commands.Cog):
                     self.bot.dispatch(
                         "red_audio_track_enqueue", player.channel.guild, track, ctx.author
                     )
+                await asyncio.sleep(0)
             player.maybe_shuffle(0 if empty_queue else 1)
 
             if len(tracks) > track_len:
@@ -4140,8 +4172,14 @@ class Audio(commands.Cog):
                 ctx, title=_("Could not find a track matching your query.")
             )
         track_list = playlist.tracks
-        tracks_obj_list = playlist.tracks_obj
+        current_count = len(track_list)
         to_append_count = len(to_append)
+        tracks_obj_list = playlist.tracks_obj
+        not_added = 0
+        if current_count + to_append_count > 10000:
+            to_append = to_append[: 10000 - current_count]
+            not_added = to_append_count - len(to_append)
+            to_append_count = len(to_append)
         scope_name = humanize_scope(
             scope, ctx=guild if scope == PlaylistScope.GUILD.value else author
         )
@@ -4158,6 +4196,9 @@ class Audio(commands.Cog):
                     ).format(
                         track=to.title, playlist=playlist.name, id=playlist.id, scope=scope_name
                     ),
+                    footer=_("Playlist limit reached: Could not add track.").format(not_added)
+                    if not_added > 0
+                    else None,
                 )
             else:
                 appended += 1
@@ -4196,6 +4237,7 @@ class Audio(commands.Cog):
         embed = discord.Embed(title=_("Playlist Modified"), description=desc)
         await self._embed_msg(ctx, embed=embed)
 
+    @commands.cooldown(1, 300, commands.BucketType.member)
     @playlist.command(name="copy", usage="<id_or_name> [args]")
     async def _playlist_copy(
         self,
@@ -4272,6 +4314,7 @@ class Audio(commands.Cog):
             return await self._embed_msg(ctx, title=str(e))
 
         if playlist_id is None:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -4280,6 +4323,7 @@ class Audio(commands.Cog):
 
         temp_playlist = FakePlaylist(to_author.id, to_scope)
         if not await self.can_manage_playlist(to_scope, temp_playlist, ctx, to_author, to_guild):
+            ctx.command.reset_cooldown(ctx)
             return
 
         try:
@@ -4287,6 +4331,7 @@ class Audio(commands.Cog):
                 playlist_id, from_scope, self.bot, from_guild, from_author.id
             )
         except RuntimeError:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -4295,6 +4340,7 @@ class Audio(commands.Cog):
                 ),
             )
         except MissingGuild:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx, title=_("You need to specify the Guild ID for the guild to lookup.")
             )
@@ -4483,6 +4529,7 @@ class Audio(commands.Cog):
             ),
         )
 
+    @commands.cooldown(1, 30, commands.BucketType.member)
     @playlist.command(name="dedupe", usage="<playlist_name_OR_id> [args]")
     async def _playlist_remdupe(
         self,
@@ -4536,6 +4583,7 @@ class Audio(commands.Cog):
             except TooManyMatches as e:
                 return await self._embed_msg(ctx, title=str(e))
             if playlist_id is None:
+                ctx.command.reset_cooldown(ctx)
                 return await self._embed_msg(
                     ctx,
                     title=_("Playlist Not Found"),
@@ -4547,6 +4595,7 @@ class Audio(commands.Cog):
             try:
                 playlist = await get_playlist(playlist_id, scope, self.bot, guild, author)
             except RuntimeError:
+                ctx.command.reset_cooldown(ctx)
                 return await self._embed_msg(
                     ctx,
                     title=_("Playlist Not Found"),
@@ -4555,12 +4604,14 @@ class Audio(commands.Cog):
                     ),
                 )
             except MissingGuild:
+                ctx.command.reset_cooldown(ctx)
                 return await self._embed_msg(
                     ctx,
                     title=_("Missing Arguments"),
                     description=_("You need to specify the Guild ID for the guild to lookup."),
                 )
             if not await self.can_manage_playlist(scope, playlist, ctx, author, guild):
+                ctx.command.reset_cooldown(ctx)
                 return
 
             track_objects = playlist.tracks_obj
@@ -4613,6 +4664,7 @@ class Audio(commands.Cog):
     @checks.is_owner()
     @playlist.command(name="download", usage="<playlist_name_OR_id> [v2=False] [args]")
     @commands.bot_has_permissions(attach_files=True)
+    @commands.cooldown(1, 60, commands.BucketType.guild)
     async def _playlist_download(
         self,
         ctx: commands.Context,
@@ -4666,6 +4718,7 @@ class Audio(commands.Cog):
         except TooManyMatches as e:
             return await self._embed_msg(ctx, title=str(e))
         if playlist_id is None:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -4675,6 +4728,7 @@ class Audio(commands.Cog):
         try:
             playlist = await get_playlist(playlist_id, scope, self.bot, guild, author)
         except RuntimeError:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -4683,6 +4737,7 @@ class Audio(commands.Cog):
                 ),
             )
         except MissingGuild:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Missing Arguments"),
@@ -4700,6 +4755,7 @@ class Audio(commands.Cog):
             for track in playlist.tracks:
                 if track["info"]["uri"].startswith(tuple(v2_valid_urls)):
                     song_list.append(track["info"]["uri"])
+                await asyncio.sleep(0)
             playlist_data = {
                 "author": playlist.author,
                 "link": playlist.url,
@@ -4721,9 +4777,34 @@ class Audio(commands.Cog):
         to_write = BytesIO()
         to_write.write(playlist_data)
         to_write.seek(0)
-        await ctx.send(file=discord.File(to_write, filename=f"{file_name}.txt"))
+        if to_write.getbuffer().nbytes > ctx.guild.filesize_limit - 10000:
+            datapath = cog_data_path(raw_name="Audio")
+            temp_file = datapath / f"{file_name}.txt"
+            temp_tar = datapath / f"{file_name}.tar.gz"
+            with temp_file.open("wb") as playlist_file:
+                playlist_file.write(to_write.read())
+
+            with tarfile.open(str(temp_tar), "w:gz") as tar:
+                tar.add(
+                    str(temp_file), arcname=str(temp_file.relative_to(datapath)), recursive=False
+                )
+            try:
+                if os.path.getsize(str(temp_tar)) > ctx.guild.filesize_limit - 10000:
+                    await ctx.send(_("This playlist is too large to be send in this server."))
+                else:
+                    await ctx.send(
+                        content=_("Playlist is too large, here is the compressed version."),
+                        file=discord.File(str(temp_tar)),
+                    )
+            except Exception:
+                pass
+            temp_file.unlink()
+            temp_tar.unlink()
+        else:
+            await ctx.send(file=discord.File(to_write, filename=f"{file_name}.txt"))
         to_write.close()
 
+    @commands.cooldown(1, 20, commands.BucketType.member)
     @playlist.command(name="info", usage="<playlist_name_OR_id> [args]")
     async def _playlist_info(
         self,
@@ -4776,6 +4857,7 @@ class Audio(commands.Cog):
         except TooManyMatches as e:
             return await self._embed_msg(ctx, title=str(e))
         if playlist_id is None:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -4785,6 +4867,7 @@ class Audio(commands.Cog):
         try:
             playlist = await get_playlist(playlist_id, scope, self.bot, guild, author)
         except RuntimeError:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -4793,6 +4876,7 @@ class Audio(commands.Cog):
                 ),
             )
         except MissingGuild:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Missing Arguments"),
@@ -4804,7 +4888,9 @@ class Audio(commands.Cog):
         track_idx = 0
         if track_len > 0:
             spaces = "\N{EN SPACE}" * (len(str(len(playlist.tracks))) + 2)
-            for track in playlist.tracks:
+            for i, track in enumerate(playlist.tracks, start=1):
+                if i % 500 == 0:  # TODO: Improve when Toby menu's are merged
+                    await asyncio.sleep(0.1)
                 track_idx = track_idx + 1
                 query = audio_dataclasses.Query.process_input(track["info"]["uri"])
                 if query.is_local:
@@ -4822,6 +4908,7 @@ class Audio(commands.Cog):
                     msg += "`{}.` **[{}]({})**\n".format(
                         track_idx, track["info"]["title"], track["info"]["uri"]
                     )
+                await asyncio.sleep(0)
 
         else:
             msg = "No tracks."
@@ -4853,6 +4940,7 @@ class Audio(commands.Cog):
             page_list.append(embed)
         await menu(ctx, page_list, DEFAULT_CONTROLS)
 
+    @commands.cooldown(1, 30, commands.BucketType.guild)
     @playlist.command(name="list", usage="[args]")
     @commands.bot_has_permissions(add_reactions=True)
     async def _playlist_list(self, ctx: commands.Context, *, scope_data: ScopeParser = None):
@@ -4893,6 +4981,7 @@ class Audio(commands.Cog):
         try:
             playlists = await get_all_playlist(scope, self.bot, guild, author, specified_user)
         except MissingGuild:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Missing Arguments"),
@@ -4907,6 +4996,7 @@ class Audio(commands.Cog):
             name = "Global"
 
         if not playlists and specified_user:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -4915,6 +5005,7 @@ class Audio(commands.Cog):
                 ),
             )
         elif not playlists:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -4938,6 +5029,7 @@ class Audio(commands.Cog):
                     )
                 )
             )
+            await asyncio.sleep(0)
         abc_names = sorted(playlist_list, key=str.lower)
         len_playlist_list_pages = math.ceil(len(abc_names) / 5)
         playlist_embeds = []
@@ -4945,6 +5037,7 @@ class Audio(commands.Cog):
         for page_num in range(1, len_playlist_list_pages + 1):
             embed = await self._build_playlist_list_page(ctx, page_num, abc_names, name)
             playlist_embeds.append(embed)
+            await asyncio.sleep(0)
         await menu(ctx, playlist_embeds, DEFAULT_CONTROLS)
 
     @staticmethod
@@ -4958,6 +5051,7 @@ class Audio(commands.Cog):
         ):
             item_idx = i + 1
             plist += "`{}.` {}".format(item_idx, playlist_info)
+            await asyncio.sleep(0)
         embed = discord.Embed(
             colour=await ctx.embed_colour(),
             title=_("Playlists for {scope}:").format(scope=scope),
@@ -5042,7 +5136,16 @@ class Audio(commands.Cog):
             track_obj = track_creator(player, queue_idx)
             tracklist.append(track_obj)
 
-        playlist = await create_playlist(ctx, scope, playlist_name, None, tracklist, author, guild)
+            for i, track in enumerate(to_add, start=1):
+                if i % 500 == 0:  # TODO: Improve when Toby menu's are merged
+                    await asyncio.sleep(0.02)
+                queue_idx = player.queue.index(track)
+                track_obj = track_creator(player, queue_idx)
+                tracklist.append(track_obj)
+                playlist = await create_playlist(
+                    ctx, scope, playlist_name, None, tracklist, author, guild
+                )
+                await asyncio.sleep(0)
         await self._embed_msg(
             ctx,
             title=_("Playlist Created"),
@@ -5052,6 +5155,9 @@ class Audio(commands.Cog):
             ).format(
                 name=playlist.name, num=len(playlist.tracks), id=playlist.id, scope=scope_name
             ),
+            footer=_("Playlist limit reached: Could not add {} tracks.").format(not_added)
+            if not_added > 0
+            else None,
         )
 
     @playlist.command(name="remove", usage="<playlist_name_OR_id> <url> [args]")
@@ -5241,6 +5347,12 @@ class Audio(commands.Cog):
         if isinstance(tracklist, discord.Message):
             return None
         if tracklist is not None:
+            playlist_length = len(tracklist)
+            not_added = 0
+            if playlist_length > 10000:
+                tracklist = tracklist[:10000]
+                not_added = playlist_length - 10000
+
             playlist = await create_playlist(
                 ctx, scope, playlist_name, playlist_url, tracklist, author, guild
             )
@@ -5312,6 +5424,7 @@ class Audio(commands.Cog):
         except TooManyMatches as e:
             return await self._embed_msg(ctx, title=str(e))
         if playlist_id is None:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -5319,9 +5432,11 @@ class Audio(commands.Cog):
             )
 
         if not await self._playlist_check(ctx):
+            ctx.command.reset_cooldown(ctx)
             return
         jukebox_price = await self.config.guild(ctx.guild).jukebox_price()
         if not await self._currency_check(ctx, jukebox_price):
+            ctx.command.reset_cooldown(ctx)
             return
         maxlength = await self.config.guild(ctx.guild).maxlength()
         author_obj = self.bot.get_user(ctx.author.id)
@@ -5332,7 +5447,11 @@ class Audio(commands.Cog):
             player = lavalink.get_player(ctx.guild.id)
             tracks = playlist.tracks_obj
             empty_queue = not player.queue
-            for track in tracks:
+            for i, track in enumerate(tracks, start=1):
+                if i % 500 == 0:  # TODO: Improve when Toby menu's are merged
+                    await asyncio.sleep(0.02)
+                if len(player.queue) >= 10000:
+                    continue
                 if not await is_allowed(
                     ctx.guild,
                     (
@@ -5365,6 +5484,7 @@ class Audio(commands.Cog):
                     "red_audio_track_enqueue", player.channel.guild, track, ctx.author
                 )
                 track_len += 1
+                await asyncio.sleep(0)
             player.maybe_shuffle(0 if empty_queue else 1)
             if len(tracks) > track_len:
                 maxlength_msg = " {bad_tracks} tracks cannot be queued.".format(
@@ -5397,6 +5517,7 @@ class Audio(commands.Cog):
                 await player.play()
             return
         except RuntimeError:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -5405,6 +5526,7 @@ class Audio(commands.Cog):
                 ),
             )
         except MissingGuild:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Missing Arguments"),
@@ -5414,6 +5536,7 @@ class Audio(commands.Cog):
             if playlist:
                 return await ctx.invoke(self.play, query=playlist.url)
 
+    @commands.cooldown(1, 60, commands.BucketType.member)
     @playlist.command(name="update", usage="<playlist_name_OR_id> [args]")
     async def _playlist_update(
         self,
@@ -5464,6 +5587,7 @@ class Audio(commands.Cog):
             return await self._embed_msg(ctx, title=str(e))
 
         if playlist_id is None:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -5471,6 +5595,7 @@ class Audio(commands.Cog):
             )
 
         if not await self._playlist_check(ctx):
+            ctx.command.reset_cooldown(ctx)
             return
         try:
             playlist = await get_playlist(playlist_id, scope, self.bot, guild, author)
@@ -5486,6 +5611,7 @@ class Audio(commands.Cog):
                     description=_("Custom playlists cannot be updated."),
                 )
         except RuntimeError:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -5648,7 +5774,8 @@ class Audio(commands.Cog):
         else:
             uploaded_playlist_url = uploaded_playlist.get("link", None)
             track_list = uploaded_playlist.get("playlist", [])
-
+        if len(track_list) > 10000:
+            return await self._embed_msg(ctx, title=_("This playlist is too large."))
         uploaded_playlist_name = uploaded_playlist.get(
             "name", (file_url.split("/")[6]).split(".")[0]
         )
@@ -5688,6 +5815,7 @@ class Audio(commands.Cog):
             scope_data=(scope, author, guild, specified_user),
         )
 
+    @commands.cooldown(1, 60, commands.BucketType.member)
     @playlist.command(name="rename", usage="<playlist_name_OR_id> <new_name> [args]")
     async def _playlist_rename(
         self,
@@ -5733,6 +5861,7 @@ class Audio(commands.Cog):
 
         new_name = new_name.split(" ")[0].strip('"')[:32]
         if new_name.isnumeric():
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Invalid Playlist Name"),
@@ -5749,6 +5878,7 @@ class Audio(commands.Cog):
         except TooManyMatches as e:
             return await self._embed_msg(ctx, title=str(e))
         if playlist_id is None:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -5758,6 +5888,7 @@ class Audio(commands.Cog):
         try:
             playlist = await get_playlist(playlist_id, scope, self.bot, guild, author)
         except RuntimeError:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Playlist Not Found"),
@@ -5766,6 +5897,7 @@ class Audio(commands.Cog):
                 ),
             )
         except MissingGuild:
+            ctx.command.reset_cooldown(ctx)
             return await self._embed_msg(
                 ctx,
                 title=_("Missing Arguments"),
@@ -5773,6 +5905,7 @@ class Audio(commands.Cog):
             )
 
         if not await self.can_manage_playlist(scope, playlist, ctx, author, guild):
+            ctx.command.reset_cooldown(ctx)
             return
         scope_name = humanize_scope(
             scope, ctx=guild if scope == PlaylistScope.GUILD.value else author
@@ -5870,9 +6003,21 @@ class Audio(commands.Cog):
         for song_url in uploaded_track_list:
             track_count += 1
             try:
-                result, called_api = await self.music_cache.lavalink_query(
-                    ctx, player, audio_dataclasses.Query.process_input(song_url)
-                )
+                try:
+                    result, called_api = await self.music_cache.lavalink_query(
+                        ctx, player, audio_dataclasses.Query.process_input(song_url)
+                    )
+                except TrackEnqueueError:
+                    self._play_lock(ctx, False)
+                    return await self._embed_msg(
+                        ctx,
+                        title=_("Unable to Get Track"),
+                        description=_(
+                            "I'm unable get a track from Lavalink at the moment, try again in a few "
+                            "minutes."
+                        ),
+                    )
+
                 track = result.tracks
             except Exception:
                 continue
@@ -6032,9 +6177,22 @@ class Audio(commands.Cog):
             for track in tracks:
                 track_obj = track_creator(player, other_track=track)
                 tracklist.append(track_obj)
+                await asyncio.sleep(0)
             self._play_lock(ctx, False)
         elif query.is_search:
-            result, called_api = await self.music_cache.lavalink_query(ctx, player, query)
+            try:
+                result, called_api = await self.music_cache.lavalink_query(ctx, player, query)
+            except TrackEnqueueError:
+                self._play_lock(ctx, False)
+                return await self._embed_msg(
+                    ctx,
+                    title=_("Unable to Get Track"),
+                    description=_(
+                        "I'm unable get a track from Lavalink at the moment, try again in a few "
+                        "minutes."
+                    ),
+                )
+
             tracks = result.tracks
             if not tracks:
                 embed = discord.Embed(title=_("Nothing found."))
@@ -6049,13 +6207,26 @@ class Audio(commands.Cog):
                     ).format(suffix=query.suffix)
                 return await self._embed_msg(ctx, embed=embed)
         else:
-            result, called_api = await self.music_cache.lavalink_query(ctx, player, query)
+            try:
+                result, called_api = await self.music_cache.lavalink_query(ctx, player, query)
+            except TrackEnqueueError:
+                self._play_lock(ctx, False)
+                return await self._embed_msg(
+                    ctx,
+                    title=_("Unable to Get Track"),
+                    description=_(
+                        "I'm unable get a track from Lavalink at the moment, try again in a few "
+                        "minutes."
+                    ),
+                )
+
             tracks = result.tracks
 
         if not search and len(tracklist) == 0:
             for track in tracks:
                 track_obj = track_creator(player, other_track=track)
                 tracklist.append(track_obj)
+                await asyncio.sleep(0)
         elif len(tracklist) == 0:
             track_obj = track_creator(player, other_track=tracks[0])
             tracklist.append(track_obj)
@@ -6235,26 +6406,32 @@ class Audio(commands.Cog):
             return await self._embed_msg(ctx, title=_("There's nothing in the queue."))
 
         async with ctx.typing():
-            len_queue_pages = math.ceil(len(player.queue) / 10)
+            limited_queue = player.queue[:500]  # TODO: Improve when Toby menu's are merged
+            len_queue_pages = math.ceil(len(limited_queue) / 10)
             queue_page_list = []
             for page_num in range(1, len_queue_pages + 1):
-                embed = await self._build_queue_page(ctx, player, page_num)
+                embed = await self._build_queue_page(ctx, limited_queue, player, page_num)
                 queue_page_list.append(embed)
+                await asyncio.sleep(0)
             if page > len_queue_pages:
                 page = len_queue_pages
         return await menu(ctx, queue_page_list, queue_controls, page=(page - 1))
 
     async def _build_queue_page(
-        self, ctx: commands.Context, player: lavalink.player_manager.Player, page_num
+        self, ctx: commands.Context, queue: list, player: lavalink.player_manager.Player, page_num
     ):
         shuffle = await self.config.guild(ctx.guild).shuffle()
         repeat = await self.config.guild(ctx.guild).repeat()
         autoplay = await self.config.guild(ctx.guild).auto_play()
 
-        queue_num_pages = math.ceil(len(player.queue) / 10)
+        queue_num_pages = math.ceil(len(queue) / 10)
         queue_idx_start = (page_num - 1) * 10
         queue_idx_end = queue_idx_start + 10
-        queue_list = ""
+        if len(player.queue) > 500:
+            queue_list = "__Too many songs in the queue, only showing the first 500__.\n\n"
+        else:
+            queue_list = ""
+
         try:
             arrow = await draw_time(ctx)
         except AttributeError:
@@ -6300,9 +6477,10 @@ class Audio(commands.Cog):
             queue_list += _("Requested by: **{user}**").format(user=player.current.requester)
             queue_list += f"\n\n{arrow}`{pos}`/`{dur}`\n\n"
 
-        for i, track in enumerate(
-            player.queue[queue_idx_start:queue_idx_end], start=queue_idx_start
-        ):
+        for i, track in enumerate(queue[queue_idx_start:queue_idx_end], start=queue_idx_start):
+            if i % 100 == 0:  # TODO: Improve when Toby menu's are merged
+                await asyncio.sleep(0.1)
+
             if len(track.title) > 40:
                 track_title = str(track.title).replace("[", "")
                 track_title = "{}...".format((track_title[:40]).rstrip(" "))
@@ -6327,6 +6505,7 @@ class Audio(commands.Cog):
             else:
                 queue_list += f"`{track_idx}.` **[{track_title}]({track.uri})**, "
                 queue_list += _("requested by **{user}**\n").format(user=req_user)
+            await asyncio.sleep(0)
 
         embed = discord.Embed(
             colour=await ctx.embed_colour(),
@@ -6340,9 +6519,9 @@ class Audio(commands.Cog):
         text = _(
             "Page {page_num}/{total_pages} | {num_tracks} tracks, {num_remaining} remaining\n"
         ).format(
-            page_num=page_num,
-            total_pages=queue_num_pages,
-            num_tracks=len(player.queue) + 1,
+            page_num=humanize_number(page_num),
+            total_pages=humanize_number(queue_num_pages),
+            num_tracks=len(player.queue),
             num_remaining=queue_total_duration,
         )
         text += (
@@ -6369,7 +6548,9 @@ class Audio(commands.Cog):
     async def _build_queue_search_list(queue_list, search_words):
         track_list = []
         queue_idx = 0
-        for track in queue_list:
+        for i, track in enumerate(queue_list, start=1):
+            if i % 100 == 0:  # TODO: Improve when Toby menu's are merged
+                await asyncio.sleep(0.1)
             queue_idx = queue_idx + 1
             if not match_url(track.uri):
                 query = audio_dataclasses.Query.process_input(track)
@@ -6382,6 +6563,7 @@ class Audio(commands.Cog):
 
             song_info = {str(queue_idx): track_title}
             track_list.append(song_info)
+            await asyncio.sleep(0)
         search_results = process.extract(search_words, track_list, limit=50)
         search_list = []
         for search, percent_match in search_results:
@@ -6399,18 +6581,23 @@ class Audio(commands.Cog):
         for i, track in enumerate(
             search_list[search_idx_start:search_idx_end], start=search_idx_start
         ):
+            if i % 100 == 0:  # TODO: Improve when Toby menu's are merged
+                await asyncio.sleep(0.1)
             track_idx = i + 1
             if type(track) is str:
                 track_location = audio_dataclasses.LocalPath(track).to_string_user()
                 track_match += "`{}.` **{}**\n".format(track_idx, track_location)
             else:
                 track_match += "`{}.` **{}**\n".format(track[0], track[1])
+            await asyncio.sleep(0)
         embed = discord.Embed(
             colour=await ctx.embed_colour(), title=_("Matching Tracks:"), description=track_match
         )
         embed.set_footer(
             text=(_("Page {page_num}/{total_pages}") + " | {num_tracks} tracks").format(
-                page_num=page_num, total_pages=search_num_pages, num_tracks=len(search_list)
+                page_num=humanize_number(page_num),
+                total_pages=humanize_number(search_num_pages),
+                num_tracks=len(search_list),
             )
         )
         return embed
@@ -6834,7 +7021,19 @@ class Audio(commands.Cog):
                     result, called_api = await self.music_cache.lavalink_query(ctx, player, query)
                     tracks = result.tracks
                 else:
-                    tracks = await self._folder_tracks(ctx, player, query)
+                    try:
+                        tracks = await self._folder_tracks(ctx, player, query)
+                    except TrackEnqueueError:
+                        self._play_lock(ctx, False)
+                        return await self._embed_msg(
+                            ctx,
+                            title=_("Unable to Get Track"),
+                            description=_(
+                                "I'm unable get a track from Lavalink at the moment, try again in a "
+                                "few "
+                                "minutes."
+                            ),
+                        )
                 if not tracks:
                     embed = discord.Embed(title=_("Nothing found."))
                     if await self.config.use_external_lavalink() and query.is_local:
@@ -6866,6 +7065,8 @@ class Audio(commands.Cog):
                 track_len = 0
                 empty_queue = not player.queue
                 for track in tracks:
+                    if len(player.queue) >= 10000:
+                        continue
                     if not await is_allowed(
                         ctx.guild,
                         (
@@ -6904,6 +7105,7 @@ class Audio(commands.Cog):
                         )
                     if not player.current:
                         await player.play()
+                    await asyncio.sleep(0)
                 player.maybe_shuffle(0 if empty_queue else 1)
                 if len(tracks) > track_len:
                     maxlength_msg = " {bad_tracks} tracks cannot be queued.".format(
@@ -6931,7 +7133,18 @@ class Audio(commands.Cog):
                 else:
                     tracks = await self._folder_list(ctx, query)
             else:
-                result, called_api = await self.music_cache.lavalink_query(ctx, player, query)
+                try:
+                    result, called_api = await self.music_cache.lavalink_query(ctx, player, query)
+                except TrackEnqueueError:
+                    self._play_lock(ctx, False)
+                    return await self._embed_msg(
+                        ctx,
+                        title=_("Unable to Get Track"),
+                        description=_(
+                            "I'm unable get a track from Lavalink at the moment,"
+                            "try again in a few minutes."
+                        ),
+                    )
                 tracks = result.tracks
             if not tracks:
                 embed = discord.Embed(title=_("Nothing found."))
@@ -6964,6 +7177,7 @@ class Audio(commands.Cog):
         for page_num in range(1, len_search_pages + 1):
             embed = await self._build_search_page(ctx, tracks, page_num)
             search_page_list.append(embed)
+            await asyncio.sleep(0)
 
         if dj_enabled and not await self._can_instaskip(ctx, ctx.author):
             return await menu(ctx, search_page_list, DEFAULT_CONTROLS)
@@ -6990,6 +7204,10 @@ class Audio(commands.Cog):
                 )
         player = lavalink.get_player(ctx.guild.id)
         guild_data = await self.config.guild(ctx.guild).all()
+        if len(player.queue) >= 10000:
+            return await self._embed_msg(
+                ctx, title=_("Unable To Play Tracks"), description=_("Queue size limit reached.")
+            )
         if not await self._currency_check(ctx, guild_data["jukebox_price"]):
             return
         try:
