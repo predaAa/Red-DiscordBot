@@ -25,12 +25,7 @@ from . import audio_dataclasses
 from .databases import CacheGetAllLavalink, CacheInterface, QueueInterface, SQLError
 from .debug import debug_exc_log
 
-from .errors import (
-    DatabaseError,
-    SpotifyFetchError,
-    TrackEnqueueError,
-    YouTubeApiError,
-)
+from .errors import DatabaseError, SpotifyFetchError, TrackEnqueueError, YouTubeApiError
 from .playlists import get_playlist
 from .utils import CacheLevel, Notifier, is_allowed, queue_duration, track_limit
 
@@ -81,7 +76,7 @@ class AudioDBAPI:
         _WRITE_GLOBAL_API_ACCESS = self.api_key is not None
         id_list = list(_bot._co_owners)
         id_list.append(_bot.owner_id)
-        self._handshake_token = "||".join(list(map(str, id_list)))
+        self._handshake_token = "||".join(list(map(self.uuid_from_id, id_list)))
         return self.api_key
 
     @staticmethod
