@@ -43,6 +43,7 @@ from . import audio_dataclasses
 from .apis import MusicCache
 from .config import pass_config_to_dependencies
 from .converters import ComplexScopeParser, ScopeParser, get_lazy_converter, get_playlist_converter
+from .debug import debug_exc_log
 from .equalizer import Equalizer
 from .errors import (
     DatabaseError,
@@ -8256,7 +8257,7 @@ class Audio(commands.Cog):
                             await player.stop()
                             await player.disconnect()
                         except Exception as err:
-                            log.error("Exception raised in Audio's emptydc_timer.", exc_info=True)
+                            debug_exc_log(log, err, f"Exception raised in Audio's emptydc_timer for : {sid}")
                             if "No such player for that guild" in str(err):
                                 stop_times.pop(sid, None)
                 elif (
@@ -8267,11 +8268,9 @@ class Audio(commands.Cog):
                         try:
                             await lavalink.get_player(sid).pause()
                         except Exception as err:
+                            debug_exc_log(log, err,  f"Exception raised in Audio's emptypause_timer for : {sid}")
                             if "No such player for that guild" in str(err):
                                 pause_times.pop(sid, None)
-                            log.error(
-                                "Exception raised in Audio's emptypause_timer.", exc_info=True
-                            )
             await asyncio.sleep(5)
 
     async def _embed_msg(self, ctx: commands.Context, **kwargs):
@@ -8590,7 +8589,7 @@ class Audio(commands.Cog):
                 player.maybe_shuffle()
                 await player.play()
             except Exception as err:
-                log.exception(f"Error restoring player in {guild_id}", exc_info=err)
+                debug_exc_log(log, err, f"Error restoring player in {guild_id}")
                 self.music_cache.persist_queue.drop(guild_id)
             # self.music_cache.persist_queue.drop(guild_id)
 
