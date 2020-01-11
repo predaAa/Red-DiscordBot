@@ -939,7 +939,8 @@ class MusicCache:
             valid_global_entry = False
             with contextlib.suppress(Exception):
                 global_entry = await self.audio_api.get_call(query=_raw_query)
-                global_entry["loadType"] = "V2_COMPAT" if global_entry["loadType"] == "V2_COMPACT" else global_entry["loadType"]
+                if global_entry.get("loadType") == "V2_COMPACT":
+                    global_entry["loadType"] = "V2_COMPAT"
                 results = LoadResult(global_entry)
                 if results.load_type in [
                     LoadType.PLAYLIST_LOADED,
@@ -1176,7 +1177,8 @@ class MusicCache:
             query = entry.query
             data = entry.data
             _raw_query = audio_dataclasses.Query.process_input(query)
-            data["loadType"] = "V2_COMPAT" if data["loadType"] == "V2_COMPACT" else data["loadType"]
+            if data.get("loadType") == "V2_COMPACT":
+                data["loadType"] = "V2_COMPAT"
             results = LoadResult(data)
             with contextlib.suppress(Exception):
                 if not _raw_query.is_local and not results.has_error and len(results.tracks) >= 1:
