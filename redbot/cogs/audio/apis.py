@@ -689,6 +689,8 @@ class MusicCache:
                 if should_query_global:
                     llresponse = await self.audio_api.get_spotify(track_name, artist_name)
                     if llresponse:
+                        if llresponse.get("loadType") == "V2_COMPACT":
+                            llresponse["loadType"] = "V2_COMPAT"
                         llresponse = LoadResult(llresponse)
                     val = llresponse or None
                 if val is None:
