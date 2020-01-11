@@ -14,6 +14,7 @@ from redbot.core import Config
 from redbot.core.bot import Red
 from redbot.core.data_manager import cog_data_path
 
+from .debug import debug_exc_log
 from .errors import InvalidTableError
 from .sql_statements import *
 from .utils import PlaylistScope
@@ -163,7 +164,7 @@ class CacheInterface:
             self.database.executemany(query, values)
             self.database.execute("COMMIT;")
         except Exception as err:
-            log.debug("Error during audio db insert", exc_info=err)
+            debug_exc_log(log, err, "Error during audio db insert")
 
     async def update(self, table: str, values: Dict[str, Union[str, int]]):
         try:
@@ -176,7 +177,7 @@ class CacheInterface:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 executor.submit(self.database.execute, sql_query, values)
         except Exception as err:
-            log.debug("Error during audio db update", exc_info=err)
+            debug_exc_log(log, err, "Error during audio db update")
 
     async def fetch_one(
         self, table: str, query: str, values: Dict[str, Union[str, int]]
