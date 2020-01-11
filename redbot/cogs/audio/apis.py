@@ -689,6 +689,8 @@ class MusicCache:
                 if should_query_global:
                     llresponse = await self.audio_api.get_spotify(track_name, artist_name)
                     if llresponse:
+                        if llresponse.get("loadType") == "V2_COMPACT":
+                            llresponse["loadType"] = "V2_COMPAT"
                         llresponse = LoadResult(llresponse)
                     val = llresponse or None
                 if val is None:
@@ -939,6 +941,8 @@ class MusicCache:
             valid_global_entry = False
             with contextlib.suppress(Exception):
                 global_entry = await self.audio_api.get_call(query=_raw_query)
+                if global_entry.get("loadType") == "V2_COMPACT":
+                    global_entry["loadType"] = "V2_COMPAT"
                 results = LoadResult(global_entry)
                 if results.load_type in [
                     LoadType.PLAYLIST_LOADED,
@@ -957,6 +961,8 @@ class MusicCache:
         elif val and not forced:
             data = val
             data["query"] = query
+            if data.get("loadType") == "V2_COMPACT":
+                data["loadType"] = "V2_COMPAT"
             results = LoadResult(data)
             called_api = False
             if results.has_error:
@@ -1082,6 +1088,8 @@ class MusicCache:
 
             if recently_played:
                 track = random.choice(recently_played)
+                if track.get("loadType") == "V2_COMPACT":
+                    track["loadType"] = "V2_COMPAT"
                 results = LoadResult(track)
                 tracks = list(results.tracks)
         except Exception:
@@ -1171,6 +1179,8 @@ class MusicCache:
             query = entry.query
             data = entry.data
             _raw_query = audio_dataclasses.Query.process_input(query)
+            if data.get("loadType") == "V2_COMPACT":
+                data["loadType"] = "V2_COMPAT"
             results = LoadResult(data)
             with contextlib.suppress(Exception):
                 if not _raw_query.is_local and not results.has_error and len(results.tracks) >= 1:
