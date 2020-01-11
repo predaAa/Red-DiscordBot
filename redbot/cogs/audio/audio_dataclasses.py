@@ -380,7 +380,7 @@ class Query:
             query = query.strip("<>")
             while "ytsearch:" in query:
                 query = query.replace("ytsearch:", "")
-            while "ytsearch:" in query:
+            while "scsearch:" in query:
                 query = query.replace("scsearch:", "")
 
         elif isinstance(query, Query):
