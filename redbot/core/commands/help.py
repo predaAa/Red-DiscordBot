@@ -666,6 +666,7 @@ class RedHelpFormatter:
             # menu needs reactions added manually since we fed it a messsage
             menus.start_adding_reactions(m, c.keys())
 
+
 @commands.command(name="help", hidden=True, i18n=T_)
 async def red_help(ctx: Context, *, thing_to_get_help_for: str = None):
     """

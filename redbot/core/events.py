@@ -186,9 +186,11 @@ def init_events(bot, cli_flags):
                 ctx.command.qualified_name, error.original
             )
             message += "```" + "\n"
-            message += ("Use the ``b!support`` command \n"
-                       "Then join the support server and the owner of the bot "
-                       "or a mod will help you when they are available")
+            message += (
+                "Use the ``b!support`` command \n"
+                "Then join the support server and the owner of the bot "
+                "or a mod will help you when they are available"
+            )
 
             exception_log = "Exception in command '{}'\n" "".format(ctx.command.qualified_name)
             exception_log += "".join(

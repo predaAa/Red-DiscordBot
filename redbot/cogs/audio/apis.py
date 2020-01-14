@@ -1001,9 +1001,7 @@ class MusicCache:
             with contextlib.suppress(SQLError):
                 time_now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
                 data = json.dumps(results._raw)
-                if all(
-                        k in data for k in ["loadType", "playlistInfo", "isSeekable", "isStream"]
-                ):
+                if all(k in data for k in ["loadType", "playlistInfo", "isSeekable", "isStream"]):
                     task = (
                         "insert",
                         (
