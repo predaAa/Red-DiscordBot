@@ -292,7 +292,7 @@ def handle_edit(cli_flags: Namespace):
 async def run_bot(red: Red, cli_flags: Namespace) -> NoReturn:
     """
     This runs the bot.
-    
+
     Any shutdown which is a result of not being able to log in needs to raise
     a SystemExit exception.
 

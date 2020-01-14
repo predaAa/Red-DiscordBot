@@ -5835,10 +5835,10 @@ class Audio(commands.Cog):
             await self._embed_msg(
                 ctx,
                 title=_(
-                    "Please upload the playlist file. Any other message will cancel this operation."
+                    "Please upload the playlist file. Any other message will cancel this "
+                    "operation."
                 ),
             )
-
             try:
                 file_message = await ctx.bot.wait_for(
                     "message", timeout=30.0, check=MessagePredicate.same_context(ctx)
@@ -6724,6 +6724,11 @@ class Audio(commands.Cog):
                     title=_("Unable To Clear Queue"),
                     description=_("You need the DJ role to clear the queue."),
                 )
+        for track in player.queue:
+            self.music_cache.persist_queue.played(
+                    ctx.guild.id, track.extras.get("enqueue_time")
+                )
+            await asyncio.sleep(0)
         player.queue.clear()
         await self._embed_msg(
             ctx, title=_("Queue Modified"), description=_("The queue has been cleared.")
@@ -6760,6 +6765,7 @@ class Audio(commands.Cog):
                     ctx.guild.id, track.extras.get("enqueue_time")
                 )
                 removed_tracks += 1
+            await asyncio.sleep(0)
         player.queue = clean_tracks
         if removed_tracks == 0:
             await self._embed_msg(ctx, title=_("Removed 0 tracks."))
@@ -6795,6 +6801,7 @@ class Audio(commands.Cog):
                     ctx.guild.id, track.extras.get("enqueue_time")
                 )
                 removed_tracks += 1
+            await asyncio.sleep(0)
         player.queue = clean_tracks
         if removed_tracks == 0:
             await self._embed_msg(ctx, title=_("Removed 0 tracks."))
