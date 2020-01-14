@@ -8,6 +8,8 @@ import getpass
 import json
 import logging
 import os
+from typing import NoReturn
+
 import pip
 import platform
 import shutil
@@ -287,7 +289,7 @@ def handle_edit(cli_flags: Namespace):
         sys.exit(0)
 
 
-async def run_bot(red: Red, cli_flags: Namespace) -> None:
+async def run_bot(red: Red, cli_flags: Namespace) -> NoReturn:
     """
     This runs the bot.
     
@@ -354,8 +356,6 @@ async def run_bot(red: Red, cli_flags: Namespace) -> None:
                 print("Token has been reset.")
                 sys.exit(0)
         sys.exit(1)
-
-    return None
 
 
 def handle_early_exit_flags(cli_flags: Namespace):
