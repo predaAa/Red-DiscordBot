@@ -742,7 +742,7 @@ class Audio(commands.Cog):
         """
 
         await self.config.global_db_get_timeout.set(timeout)
-        await ctx.send(_(f"Request timeout set to {timeout} second(s)"))
+        await ctx.send(_("Request timeout set to {time} second(s)").format(time=timeout))
 
     @_audiodb.command(name="contribute")
     async def contribute(self, ctx: commands.Context):
