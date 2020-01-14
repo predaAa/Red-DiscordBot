@@ -676,11 +676,8 @@ class Economy(commands.Cog):
             pound_len=pound_len + 3,
         )
         pages = []
-        total_pages = math.ceil(all_accounts/10)
-        embed = discord.Embed(
-            title="Imperial Bank Leaderboard",
-            color= await ctx.embed_color()
-        )
+        total_pages = math.ceil(all_accounts / 10)
+        embed = discord.Embed(title="Imperial Bank Leaderboard", color=await ctx.embed_color())
         highscores = ""
         temp_msg = header
         for i, acc in enumerate(bank_sorted, start=1):
@@ -691,7 +688,7 @@ class Economy(commands.Cog):
                 if await ctx.bot.is_owner(ctx.author):
                     user_id = f"({str(acc[0])})"
                 name = f"{acc[1]['name']}"
- 
+
             balance = acc[1]["balance"]
             if balance > max_bal:
                 balance = max_bal
@@ -702,7 +699,7 @@ class Economy(commands.Cog):
                     f"{f'{humanize_number(i)}.': <{pound_len+2}} "
                     f"{balance: <{bal_len + 5}} {name}\n"
                 )
- 
+
             else:
                 highscores += (
                     f"{f'{humanize_number(i)}.': <{pound_len+2}} "
@@ -712,20 +709,28 @@ class Economy(commands.Cog):
 
             if i % 10 == 0:
                 embed = discord.Embed(
-                title="Imperial Bank Leaderboard\nYou are currently #{}/{}".format(pos, all_accounts),
-                color= await ctx.embed_color(),
-                description="```md\n{}``` ```md\n{}``` ```py\nTotal bank amount {}\nYou have {}% of the total amount!```".format(header, highscores, overall_total, percent))
+                    title="Imperial Bank Leaderboard\nYou are currently #{}/{}".format(
+                        pos, all_accounts
+                    ),
+                    color=await ctx.embed_color(),
+                    description="```md\n{}``` ```md\n{}``` ```py\nTotal bank amount {}\nYou have {}% of the total amount!```".format(
+                        header, highscores, overall_total, percent
+                    ),
+                )
                 embed.set_footer(text=f"Page {i//10}/{total_pages}")
                 pages.append(embed)
                 highscores = ""
         if highscores:
             embed = discord.Embed(
-                    title="Imperial Bank Leaderboard",
-                    color= await ctx.embed_color(),
-                    description="```md\n{}``` ```md\n{}``` ```py\nTotal bank amount {}\nYou have {}% of the total amount!```".format(header, highscores, overall_total, percent))
+                title="Imperial Bank Leaderboard",
+                color=await ctx.embed_color(),
+                description="```md\n{}``` ```md\n{}``` ```py\nTotal bank amount {}\nYou have {}% of the total amount!```".format(
+                    header, highscores, overall_total, percent
+                ),
+            )
             embed.set_footer(text=f"Page {i//10}/{total_pages}")
             pages.append(embed)
- 
+
         if pages:
             return await menu(ctx, pages, DEFAULT_CONTROLS)
 

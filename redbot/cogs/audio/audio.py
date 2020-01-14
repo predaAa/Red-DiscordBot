@@ -4438,8 +4438,8 @@ class Audio(commands.Cog):
             ).format(
                 name=from_playlist.name,
                 from_id=from_playlist.id,
-                from_scope=humanize_scope(from_scope, ctx=from_scope_name, the=True),
-                to_scope=humanize_scope(to_scope, ctx=to_scope_name, the=True),
+                from_scope=humanize_scope(from_scope, ctx=from_scope_name),
+                to_scope=humanize_scope(to_scope, ctx=to_scope_name),
                 to_id=to_playlist.id,
             ),
         )
@@ -8257,7 +8257,9 @@ class Audio(commands.Cog):
                             await player.stop()
                             await player.disconnect()
                         except Exception as err:
-                            debug_exc_log(log, err, f"Exception raised in Audio's emptydc_timer for : {sid}")
+                            debug_exc_log(
+                                log, err, f"Exception raised in Audio's emptydc_timer for : {sid}"
+                            )
                             if "No such player for that guild" in str(err):
                                 stop_times.pop(sid, None)
                 elif (
@@ -8268,7 +8270,11 @@ class Audio(commands.Cog):
                         try:
                             await lavalink.get_player(sid).pause()
                         except Exception as err:
-                            debug_exc_log(log, err,  f"Exception raised in Audio's emptypause_timer for : {sid}")
+                            debug_exc_log(
+                                log,
+                                err,
+                                f"Exception raised in Audio's emptypause_timer for : {sid}",
+                            )
                             if "No such player for that guild" in str(err):
                                 pause_times.pop(sid, None)
             await asyncio.sleep(5)
