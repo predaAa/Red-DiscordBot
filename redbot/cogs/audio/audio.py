@@ -24,6 +24,7 @@ from discord.embeds import EmptyEmbed
 from discord.utils import escape_markdown as escape
 from fuzzywuzzy import process
 
+from redbot import VersionInfo, version_info
 from redbot.core import Config, bank, checks, commands
 from redbot.core.bot import Red
 from redbot.core.data_manager import cog_data_path
@@ -43,7 +44,7 @@ from . import audio_dataclasses
 from .apis import MusicCache
 from .config import pass_config_to_dependencies
 from .converters import ComplexScopeParser, ScopeParser, get_lazy_converter, get_playlist_converter
-from .debug import debug_exc_log
+from .debug import is_debug, debug_exc_log
 from .equalizer import Equalizer
 from .errors import (
     DatabaseError,
@@ -68,15 +69,19 @@ from .playlists import (
 from .utils import *
 
 _ = Translator("Audio", __file__)
+red_extras = version_info.to_json()
+red_extras.update({"major": 1, "minor": 1, "micro": 0})
+__version__ = VersionInfo.from_json(red_extras)
 
-__version__ = "1.1.0"
 __author__ = ["aikaterna", "Draper"]
 
-log = logging.getLogger("red.audio")
+log = logging.getLogger("red.cogs.Audio")
 
 _SCHEMA_VERSION = 3
 LazyGreedyConverter = get_lazy_converter("--")
 PlaylistConverter = get_playlist_converter()
+
+IS_DEBUG = is_debug()
 
 
 @cog_i18n(_)
@@ -111,7 +116,7 @@ class Audio(commands.Cog):
             cache_level=0,
             cache_age=365,
             global_db_enabled=False,
-            global_db_get_timeout=5.0,
+            global_db_get_timeout=5,  # Here as a placeholder in case we want to enable the command
             status=False,
             use_external_lavalink=False,
             restrict=True,
@@ -636,10 +641,11 @@ class Audio(commands.Cog):
                 player = lavalink.get_player(guild.id)
                 player.store("connect", datetime.datetime.utcnow())
             except IndexError:
-                log.debug(
-                    f"Connection to Lavalink has not yet been established"
-                    f" while trying to connect to to {channel} in {guild}."
-                )
+                if IS_DEBUG:
+                    log.debug(
+                        f"Connection to Lavalink has not yet been established"
+                        f" while trying to connect to to {channel} in {guild}."
+                    )
                 return
         query = audio_dataclasses.Query.process_input(query)
         restrict = await self.config.restrict()
@@ -659,14 +665,16 @@ class Audio(commands.Cog):
         (results, called_api) = await self.music_cache.lavalink_query(ctx(guild), player, query)
 
         if not results.tracks:
-            log.debug(f"Query returned no tracks.")
+            if IS_DEBUG:
+                log.debug(f"Query returned no tracks.")
             return
         track = results.tracks[0]
 
         if not await is_allowed(
             guild, f"{track.title} {track.author} {track.uri} {str(query._raw)}"
         ):
-            log.debug(f"Query is not allowed in {guild} ({guild.id})")
+            if IS_DEBUG:
+                log.debug(f"Query is not allowed in {guild} ({guild.id})")
             return
         track.extras["autoplay"] = is_autoplay
         track.extras.update(
@@ -2887,7 +2895,6 @@ class Audio(commands.Cog):
                     description=_("You need the DJ role to queue tracks."),
                 )
         player = lavalink.get_player(ctx.guild.id)
-
         player.store("channel", ctx.channel.id)
         player.store("guild", ctx.guild.id)
         await self._eq_check(ctx, player)
@@ -3076,7 +3083,8 @@ class Audio(commands.Cog):
                 f"{str(audio_dataclasses.Query.process_input(single_track))}"
             ),
         ):
-            log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
+            if IS_DEBUG:
+                log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
             self._play_lock(ctx, False)
             return await self._embed_msg(
                 ctx,
@@ -3685,7 +3693,8 @@ class Audio(commands.Cog):
                         f"{str(audio_dataclasses.Query.process_input(track))}"
                     ),
                 ):
-                    log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
+                    if IS_DEBUG:
+                        log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
                     continue
                 elif guild_data["maxlength"] > 0:
                     if track_limit(track, guild_data["maxlength"]):
@@ -3773,7 +3782,8 @@ class Audio(commands.Cog):
                         f"{str(audio_dataclasses.Query.process_input(single_track))}"
                     ),
                 ):
-                    log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
+                    if IS_DEBUG:
+                        log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
                     self._play_lock(ctx, False)
                     return await self._embed_msg(
                         ctx, title=_("This track is not allowed in this server.")
@@ -5541,7 +5551,8 @@ class Audio(commands.Cog):
                         f"{str(audio_dataclasses.Query.process_input(track))}"
                     ),
                 ):
-                    log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
+                    if IS_DEBUG:
+                        log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
                     continue
                 query = audio_dataclasses.Query.process_input(track.uri)
                 if query.is_local:
@@ -6108,13 +6119,15 @@ class Audio(commands.Cog):
                     )
 
                 track = result.tracks
-            except Exception:
+            except Exception as err:
+                debug_exc_log(log, err, f"Failed to get track for {song_url}")
                 continue
             try:
                 track_obj = track_creator(player, other_track=track[0])
                 track_list.append(track_obj)
                 successful_count += 1
-            except Exception:
+            except Exception as err:
+                debug_exc_log(log, err, f"Failed to create track for {track[0]}")
                 continue
             if (track_count % 2 == 0) or (track_count == len(uploaded_track_list)):
                 await notifier.notify_user(
@@ -7178,7 +7191,8 @@ class Audio(commands.Cog):
                             f"{str(audio_dataclasses.Query.process_input(track))}"
                         ),
                     ):
-                        log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
+                        if IS_DEBUG:
+                            log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
                         continue
                     elif guild_data["maxlength"] > 0:
                         if track_limit(track, guild_data["maxlength"]):
@@ -7351,7 +7365,8 @@ class Audio(commands.Cog):
                 f"{str(audio_dataclasses.Query.process_input(search_choice))}"
             ),
         ):
-            log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
+            if IS_DEBUG:
+                log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
             self._play_lock(ctx, False)
             return await self._embed_msg(ctx, title=_("This track is not allowed in this server."))
         elif guild_data["maxlength"] > 0:
@@ -7789,10 +7804,11 @@ class Audio(commands.Cog):
     async def is_requester(ctx: commands.Context, member: discord.Member):
         try:
             player = lavalink.get_player(ctx.guild.id)
-            log.debug(f"Current requester is {player.current}")
+            if IS_DEBUG:
+                log.debug(f"Current requester is {player.current}")
             return player.current.requester.id == member.id
-        except Exception as e:
-            log.error(e)
+        except Exception as err:
+            debug_exc_log(log, err, "Caught error in `is_requester`")
         return False
 
     async def _skip_action(self, ctx: commands.Context, skip_to_track: int = None):
@@ -8250,9 +8266,9 @@ class Audio(commands.Cog):
                     if p.paused and server.id in pause_times:
                         try:
                             await p.pause(False)
-                        except Exception:
-                            log.error(
-                                "Exception raised in Audio's emptypause_timer.", exc_info=True
+                        except Exception as err:
+                            debug_exc_log(
+                                log, err, "Exception raised in Audio's emptypause_timer for: {sid}"
                             )
                     pause_times.pop(server.id, None)
             servers = stop_times.copy()
@@ -8269,7 +8285,7 @@ class Audio(commands.Cog):
                             await player.disconnect()
                         except Exception as err:
                             debug_exc_log(
-                                log, err, f"Exception raised in Audio's emptydc_timer for : {sid}"
+                                log, err, f"Exception raised in Audio's emptydc_timer for: {sid}"
                             )
                             if "No such player for that guild" in str(err):
                                 stop_times.pop(sid, None)
@@ -8501,12 +8517,14 @@ class Audio(commands.Cog):
                     guild=guild,
                 )
                 await playlist.save()
-        with contextlib.suppress(Exception):
-            too_old = midnight - datetime.timedelta(days=8)
-            too_old_id = int(time.mktime(too_old.timetuple()))
+        too_old = midnight - datetime.timedelta(days=8)
+        too_old_id = int(time.mktime(too_old.timetuple()))
+        try:
             await delete_playlist(
                 scope=scope, playlist_id=too_old_id, guild=guild, author=self.bot.user
             )
+        except Exception as err:
+            debug_exc_log(log, err, f"Failed to delete daily playlist ID: {too_old_id}")
         self.music_cache.persist_queue.played(guild_id=guild.id, track_id=track_identifier)
 
     @commands.Cog.listener()
@@ -8631,22 +8649,7 @@ class Audio(commands.Cog):
 
             self._cleaned_up = True
 
-    @autoplay.error
-    @bump.error
-    @bumpplay.error
-    @disconnect.error
-    @genre.error
-    @local_folder.error
-    @local_play.error
-    @local_search.error
-    @play.error
-    @prev.error
-    @search.error
-    @_playlist_append.error
-    @_playlist_save.error
-    @_playlist_update.error
-    @_playlist_upload.error
-    async def _clear_lock_on_error(self, ctx: commands.Context, error):
+    async def cog_command_error(self, ctx: commands.Context, error: Exception):
         if not isinstance(
             getattr(error, "original", error),
             (
