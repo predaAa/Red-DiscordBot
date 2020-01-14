@@ -22,8 +22,6 @@ from .drivers import IdentifierData, get_driver, ConfigCategory, BaseDriver
 
 __all__ = ["Config", "get_latest_confs", "migrate"]
 
-__all__ = ["Config", "get_latest_confs"]
-
 log = logging.getLogger("red.config")
 
 _T = TypeVar("_T")

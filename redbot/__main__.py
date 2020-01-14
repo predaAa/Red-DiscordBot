@@ -16,7 +16,6 @@ import sys
 from argparse import Namespace
 from copy import deepcopy
 from pathlib import Path
-from typing import NoReturn
 
 import discord
 

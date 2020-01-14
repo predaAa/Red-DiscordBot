@@ -407,10 +407,6 @@ LAVALINK_FETCH_ALL_ENTRIES_GLOBAL = """
 SELECT query, data 
 FROM lavalink
 """
-LAVALINK_FETCH_ALL_ENTRIES_GLOBAL = """
-SELECT query, data 
-FROM lavalink
-"""
 
 # Persisting Queue statements
 PERSIST_QUEUE_DROP_TABLE = """

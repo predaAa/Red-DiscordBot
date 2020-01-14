@@ -4,6 +4,7 @@ import codecs
 import datetime
 import logging
 import traceback
+import time
 from datetime import timedelta
 
 import aiohttp
@@ -17,7 +18,8 @@ from .. import __version__ as red_version, version_info as red_version_info, Ver
 from . import commands
 from .config import get_latest_confs
 from .utils._internal_utils import fuzzy_command_search, format_fuzzy_results
-from .utils.chat_formatting import inline, bordered, format_perms_list, humanize_timedelta
+from .utils.chat_formatting import bordered, format_perms_list, humanize_timedelta
+from .utils import menus
 
 log = logging.getLogger("red")
 init()
@@ -37,6 +39,8 @@ def init_events(bot, cli_flags):
     async def on_connect():
         if bot._uptime is None:
             print("Connected to Discord. Getting ready...")
+        game = discord.Game("Powering up...")
+        await bot.change_presence(status=discord.Status.dnd, activity=game)
 
     @bot.event
     async def on_ready():
@@ -128,6 +132,19 @@ def init_events(bot, cli_flags):
         if outdated_red_message:
             await bot.send_to_owners(outdated_red_message)
 
+        menus.update_controls(bot)
+        bot.launch_time = abs(bot.launch_time - int(time.perf_counter()))
+        humanized_launch_time = humanize_timedelta(seconds=bot.launch_time) or "1 second"
+        chan = bot.get_guild(489162733791739950).get_channel(646857954175221810)
+        embed = discord.Embed(
+            description=(
+                "\N{WHITE HEAVY CHECK MARK} **BB-8 is Up and ready for use!**\n\nLaunch Time: **{}**"
+            ).format(humanized_launch_time),
+            color=0x00FF00,
+        )
+        await chan.send(embed=embed)
+        await bot.change_presence(status=discord.Status.online, activity=None)
+
     @bot.event
     async def on_command_error(ctx, error, unhandled_by_cog=False):
         if not unhandled_by_cog:
@@ -164,16 +181,21 @@ def init_events(bot, cli_flags):
                 exc_info=error.original,
             )
 
-            message = "Error in command '{}'. Check your console or logs for details.".format(
-                ctx.command.qualified_name
+            message = "```py" + "\n"
+            message += "Error in command '{}'\nType: {}\nThe Bot owner has received your error.".format(
+                ctx.command.qualified_name, error.original
             )
+            message += "```" + "\n"
+            message += ("Use the ``b!support`` command \n"
+                       "Then join the support server and the owner of the bot "
+                       "or a mod will help you when they are available")
+
             exception_log = "Exception in command '{}'\n" "".format(ctx.command.qualified_name)
             exception_log += "".join(
                 traceback.format_exception(type(error), error, error.__traceback__)
             )
             bot._last_exception = exception_log
-            bot.counter['cmd_error'] += 1
-            await ctx.send(inline(message))
+            await ctx.send(message)
         elif isinstance(error, commands.CommandNotFound):
             fuzzy_commands = await fuzzy_command_search(
                 ctx,
@@ -215,7 +237,6 @@ def init_events(bot, cli_flags):
             )
         else:
             log.exception(type(error).__name__, exc_info=error)
-        
 
     @bot.event
     async def on_message(message):
@@ -286,7 +307,7 @@ def init_events(bot, cli_flags):
 
     @bot.event
     async def on_socket_response(msg):
-        bot.socket_stats[msg.get('t')] += 1
+        bot.socket_stats[msg.get("t")] += 1
 
 
 def _get_startup_screen_specs():

@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, TYPE_CHECKING, Tuple, Union, MutableMapping, Mapping
 
 import apsw
+import lavalink
 
 from redbot.core import Config
 from redbot.core.bot import Red
@@ -17,7 +18,7 @@ from redbot.core.data_manager import cog_data_path
 from .debug import debug_exc_log
 from .errors import InvalidTableError
 from .sql_statements import *
-from .utils import PlaylistScope
+from .utils import PlaylistScope, track_to_json
 
 log = logging.getLogger("red.audio.database")
 
@@ -78,6 +79,20 @@ class PlaylistFetchResult:
     def __post_init__(self):
         if isinstance(self.tracks, str):
             self.tracks = json.loads(self.tracks)
+
+
+@dataclass
+class QueueFetchResult:
+    guild_id: int
+    room_id: int
+    track: dict = field(default_factory=lambda: {})
+    track_object: lavalink.Track = None
+
+    def __post_init__(self):
+        if isinstance(self.track, str):
+            self.track = json.loads(self.track)
+        if self.track:
+            self.track_object = lavalink.Track(self.track)
 
 
 @dataclass
@@ -207,6 +222,7 @@ class CacheInterface:
             if index % 50 == 0:
                 await asyncio.sleep(0.01)
             output.append(CacheLastFetchResult(*row))
+            await asyncio.sleep(0)
         return output
 
     async def fetch_random(
@@ -228,6 +244,17 @@ class CacheInterface:
                     log.debug(f"Failed to completed random fetch from database", exc_info=exc)
         return CacheLastFetchResult(*row)
 
+    async def fetch_all_for_global(self) -> List[CacheGetAllLavalink]:
+        output = []
+        for index, row in enumerate(
+            self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL), start=1
+        ):
+            if index % 50 == 0:
+                await asyncio.sleep(0.01)
+            output.append(CacheGetAllLavalink(*row))
+            await asyncio.sleep(0)
+        return output
+
     async def fetch_random(
         self, table: str, query: str, values: Dict[str, Union[str, int]]
     ) -> CacheLastFetchResult:
@@ -240,10 +267,10 @@ class CacheInterface:
         return CacheLastFetchResult(*row)
 
     async def fetch_all_for_global(self) -> List[CacheGetAllLavalink]:
-        return [
-            CacheGetAllLavalink(*row)
-            for row in self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL).fetchall()
-        ]
+        output = []
+        for row in self.database.execute(LAVALINK_FETCH_ALL_ENTRIES_GLOBAL):
+            output.append(CacheGetAllLavalink(*row))
+        return output
 
 
 class PlaylistInterface:
@@ -297,7 +324,8 @@ class PlaylistInterface:
             ):
                 if index % 50 == 0:
                     await asyncio.sleep(0.01)
-                output.append(row)
+                output.append(PlaylistFetchResult(*row))
+                await asyncio.sleep(0)
         else:
             output = []
             for index, row in enumerate(
@@ -308,8 +336,9 @@ class PlaylistInterface:
             ):
                 if index % 50 == 0:
                     await asyncio.sleep(0.01)
-                output.append(row)
-        return [PlaylistFetchResult(*row) for row in output] if output else []
+                output.append(PlaylistFetchResult(*row))
+                await asyncio.sleep(0)
+        return output
 
     async def fetch_all_converter(
         self, scope: str, playlist_name, playlist_id
@@ -336,8 +365,9 @@ class PlaylistInterface:
         ):
             if index % 50 == 0:
                 await asyncio.sleep(0.01)
-            output.append(row)
-        return [PlaylistFetchResult(*row) for row in output] if output else []
+            output.append(PlaylistFetchResult(*row))
+            await asyncio.sleep(0)
+        return output
 
     def delete(self, scope: str, playlist_id: int, scope_id: int):
         scope_type = self.get_scope_type(scope)
@@ -386,5 +416,68 @@ class PlaylistInterface:
                     "author_id": int(author_id),
                     "playlist_url": playlist_url,
                     "tracks": json.dumps(tracks),
+                },
+            )
+
+
+class QueueInterface:
+    def __init__(self):
+        self.cursor = database_connection.cursor()
+        self.cursor.execute(PRAGMA_SET_temp_store)
+        self.cursor.execute(PRAGMA_SET_journal_mode)
+        self.cursor.execute(PRAGMA_SET_read_uncommitted)
+        self.cursor.execute(PERSIST_QUEUE_CREATE_TABLE)
+        self.cursor.execute(PERSIST_QUEUE_CREATE_INDEX)
+
+    @staticmethod
+    def close():
+        with contextlib.suppress(Exception):
+            database_connection.close()
+
+    async def fetch(self) -> List[QueueFetchResult]:
+        output = []
+        for index, row in enumerate(self.cursor.execute(PERSIST_QUEUE_FETCH_ALL), start=1):
+            if index % 50 == 0:
+                await asyncio.sleep(0.01)
+            output.append(QueueFetchResult(*row))
+            await asyncio.sleep(0)
+
+        return output
+
+    def played(self, guild_id: int, track_id: str):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(
+                self.cursor.execute,
+                PERSIST_QUEUE_PLAYED,
+                {"guild_id": guild_id, "track_id": track_id},
+            )
+
+    def delete_scheduled(self):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(self.cursor.execute, PERSIST_QUEUE_DELETE_SCHEDULED)
+
+    def drop(self, guild_id: int):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(
+                self.cursor.execute, PERSIST_QUEUE_BULK_PLAYED, ({"guild_id": guild_id})
+            )
+
+    def enqueued(self, guild_id: int, room_id: int, track: lavalink.Track):
+        enqueue_time = track.extras.get("enqueue_time", 0)
+        if enqueue_time == 0:
+            track.extras["enqueue_time"] = int(time.time())
+        track_identifier = track.track_identifier
+        track = track_to_json(track)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(
+                self.cursor.execute,
+                PERSIST_QUEUE_UPSERT,
+                {
+                    "guild_id": int(guild_id),
+                    "room_id": int(room_id),
+                    "played": False,
+                    "time": enqueue_time,
+                    "track": json.dumps(track),
+                    "track_id": track_identifier,
                 },
             )

@@ -321,37 +321,48 @@ class Core(commands.Cog, CoreLogic):
         app_info = await self.bot.application_info()
         owner = app_info.owner
         custom_info = await self.bot._config.custom_info()
+        discord_server = "https://discord.gg/TEeXcDY"
 
         async with aiohttp.ClientSession() as session:
             async with session.get("{}/json".format(red_pypi)) as r:
                 data = await r.json()
         outdated = VersionInfo.from_str(data["info"]["version"]) > red_version_info
-        about = _(
-            "This bot is an instance of [Red, an open source Discord bot]({}) "
+        about = (
+            "This is an custom fork of [Red, an open source Discord bot]({}) "
             "created by [Twentysix]({}) and [improved by many]({}).\n\n"
-            "Red is backed by a passionate community who contributes and "
-            "creates content for everyone to enjoy. [Join us today]({}) "
-            "and help us improve!\n\n"
-            "(c) Cog Creators"
-        ).format(red_repo, author_repo, org_repo, support_server_url)
+            "Please do not bother Red Support for issues with my bot as they will not be able to help you. "
+            "For support with this bot please join my support [discord server]({})\n\n"
+            "This fork has numerous modifications to core Red. Some may get merged into "
+            "the main project via PR at a later date, but most changes are custom for {}\n\n"
+            "Orginal Copyright to (c) Cog Creators"
+            "".format(red_repo, author_repo, org_repo, discord_server, ctx.bot.user.name)
+        )
 
         embed = discord.Embed(color=(await ctx.embed_colour()))
-        embed.add_field(name=_("Instance owned by"), value=str(owner))
-        embed.add_field(name="Python", value=python_version)
-        embed.add_field(name="discord.py", value=dpy_version)
-        embed.add_field(name=_("Red version"), value=red_version)
+        embed.set_thumbnail(url=ctx.bot.user.avatar_url_as(static_format="png"))
+        embed.add_field(name="\N{HAMMER AND WRENCH}" "Instance owned by", value=str(owner))
+        embed.add_field(
+            name="\N{GEAR}" "Libraries",
+            value="Python: {} \nDiscord.py {} \nRed Version: {}".format(
+                python_version, dpy_version, red_version
+            ),
+        )
+
         if outdated:
             embed.add_field(
                 name=_("Outdated"), value=_("Yes, {} is available").format(data["info"]["version"])
             )
         if custom_info:
-            embed.add_field(name=_("About this instance"), value=custom_info, inline=False)
-        embed.add_field(name=_("About Red"), value=about, inline=False)
+            embed.add_field(name="About this instance", value=custom_info, inline=False)
+        embed.add_field(
+            name="\N{PUSHPIN}" "About {}".format(ctx.bot.user.name), value=about, inline=False
+        )
 
         embed.set_image(url="https://i.imgur.com/BLClEw2.png")
 
         embed.set_footer(
-            text=_("Bringing joy since 02 Jan 2016 (over {} days ago!)").format(days_since)
+            text="Bringing joy since 02 Jan 2016 (over {} days ago!)".format(days_since),
+            icon_url="https://images-ext-2.discordapp.net/external/tlTHs8liCJaeXY6qdrHUrdMft6nQCaGctzbEdUxP4QU/%3Fsize%3D1024/https/cdn.discordapp.com/icons/133049272517001216/a_aab012f3206eb514cac0432182e9e9ec.gif",
         )
         try:
             await ctx.send(embed=embed)
@@ -375,7 +386,7 @@ class Core(commands.Cog, CoreLogic):
             ]
         )
         return phrases
-    
+
     @commands.command()
     async def uptime(self, ctx: commands.Context):
         """Shows Red's uptime"""
@@ -854,7 +865,7 @@ class Core(commands.Cog, CoreLogic):
 
     @commands.group(name="set")
     async def _set(self, ctx: commands.Context):
-        """Changes Red's settings"""
+        """Changes BB-8's settings"""
         if ctx.invoked_subcommand is None:
             if ctx.guild:
                 guild = ctx.guild
@@ -878,16 +889,10 @@ class Core(commands.Cog, CoreLogic):
             locale = await ctx.bot._config.locale()
 
             prefix_string = " ".join(prefixes)
-            settings = _(
-                "{bot_name} Settings:\n\n"
-                "Prefixes: {prefixes}\n"
-                "{guild_settings}"
-                "Locale: {locale}"
-            ).format(
-                bot_name=ctx.bot.user.name,
-                prefixes=prefix_string,
-                guild_settings=guild_settings,
-                locale=locale,
+            settings = (
+                f"{ctx.bot.user.name} Settings:\n\n"
+                f"Prefixes: {prefix_string}\n"
+                f"{guild_settings}"
             )
             for page in pagify(settings):
                 await ctx.send(box(page))
@@ -1188,7 +1193,7 @@ class Core(commands.Cog, CoreLogic):
     @_set.command(aliases=["prefixes"])
     @checks.is_owner()
     async def prefix(self, ctx: commands.Context, *prefixes: str):
-        """Sets Red's global prefix(es)"""
+        """Sets BB-8's global prefix(es)"""
         if not prefixes:
             await ctx.send_help()
             return
@@ -2363,14 +2368,19 @@ class Core(commands.Cog, CoreLogic):
         author_repo = "https://github.com/Twentysix26"
         embed = discord.Embed(
             title="BB-8 Credits",
-            description="Credits for all of the people who have made various cogs for the bot and have helped to make it what is is today!",
-            color = await ctx.embed_color(),
+            description=("Credits for all of the people who have made various cogs for the bot and "
+                         "have helped to make it what is is today!"),
+            color=await ctx.embed_color(),
         )
-        embed.add_field(name="Red Discord Bot:", value="BB-8 is a custom fork of [Red, an open source Discord bot]({}) "
-                            "created by [Twentysix]({}) and [improved by many]({}).\n\n"
-                            "To run your own instance of red checkout the docs at https://red-discordbot.readthedocs.io/en/stable/index.html".format(
-                                red_repo, author_repo, org_repo)
-                        )
+        embed.add_field(
+            name="Red Discord Bot:",
+            value=("BB-8 is a custom fork of [Red, an open source Discord bot]({}) "
+            "created by [Twentysix]({}) and [improved by many]({}).\n\n"
+            "To run your own instance of red checkout the docs at "
+                   "https://red-discordbot.readthedocs.io/en/stable/index.html").format(
+                red_repo, author_repo, org_repo
+            ),
+        )
         embed.add_field(
             name="Cog Creators:",
             value=(
@@ -2386,9 +2396,10 @@ class Core(commands.Cog, CoreLogic):
                 "**Flapjack** https://github.com/flapjax/FlapJack-Cogs\n"
                 "**Flare** https://github.com/flaree/Flare-Cogs\n"
                 "**Grande** https://github.com/HarukiGrande/GrandeCogs-V3\n"
-                "**Jintaku** https://github.com/Jintaku/Jintaku-Cogs-V3\n"),
-            inline=False
-            )
+                "**Jintaku** https://github.com/Jintaku/Jintaku-Cogs-V3\n"
+            ),
+            inline=False,
+        )
         embed.add_field(
             name="Cog Creators Cont.:",
             value=(
@@ -2402,10 +2413,14 @@ class Core(commands.Cog, CoreLogic):
                 "**tmerc** https://github.com/tmercswims/tmerc-cogs\n"
                 "**Tobotimus** https://github.com/Tobotimus/Tobo-Cogs\n"
                 "**Trusty** https://github.com/TrustyJAID/Trusty-cogs/\n"
-                "**Wyn** https://github.com/Wyn10/Wyn-RedV3Cogs"),
-            inline=False
-            )
-        embed.add_field(name="Contributors", value="Predä - 尝试赢。#1001\nFlame#2941\nNeuro Assassin#4779\naikaterna#1393\nDraper#6666")
+                "**Wyn** https://github.com/Wyn10/Wyn-RedV3Cogs"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Contributors",
+            value="Predä - 尝试赢。#1001\nFlame#2941\nNeuro Assassin#4779\naikaterna#1393\nDraper#6666",
+        )
         embed.set_thumbnail(url=ctx.bot.user.avatar_url_as(static_format="png"))
         await ctx.send(embed=embed)
 

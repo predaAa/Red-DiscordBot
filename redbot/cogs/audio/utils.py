@@ -127,6 +127,11 @@ async def queue_duration(ctx) -> int:
 
 
 async def draw_time(ctx) -> str:
+    saber1 = str(discord.utils.get(_bot.emojis, id=632678611148865548))
+    saber2 = str(discord.utils.get(_bot.emojis, id=632678634280452106))
+    saber3 = str(discord.utils.get(_bot.emojis, id=632678653116940298))
+    bb8 = discord.utils.get(_bot.emojis, id=605196852647952394)
+    tiefighter = discord.utils.get(_bot.emojis, id=632674535774355486)
     player = lavalink.get_player(ctx.guild.id)
     paused = player.paused
     pos = player.position
@@ -135,15 +140,20 @@ async def draw_time(ctx) -> str:
     loc_time = round((pos / dur) * sections)
     bar = "\N{BOX DRAWINGS HEAVY HORIZONTAL}"
     seek = "\N{RADIO BUTTON}"
+    hit_loc = False
     if paused:
-        msg = "\N{DOUBLE VERTICAL BAR}"
+        msg = "{}{}".format(tiefighter, saber1)
     else:
-        msg = "\N{BLACK RIGHT-POINTING TRIANGLE}"
+        msg = "{}".format(saber1)
     for i in range(sections):
         if i == loc_time:
-            msg += seek
+            hit_loc = True
+            msg += saber3
         else:
-            msg += bar
+            if hit_loc:
+                msg += bar
+            else:
+                msg += saber2
     return msg
 
 
@@ -257,22 +267,7 @@ def track_to_json(track: lavalink.Track) -> MutableMapping:
     track_info = {}
     for k, v in zip(track_keys, track_values):
         track_info[k] = v
-    keys = ["track", "info"]
-    values = [track_id, track_info]
-    track_obj = {}
-    for key, value in zip(keys, values):
-        track_obj[key] = value
-    return track_obj
-
-
-def track_to_json(track: lavalink.Track) -> Mapping:
-    track_keys = track._info.keys()
-    track_values = track._info.values()
-    track_id = track.track_identifier
-    track_info = {}
-    for k, v in zip(track_keys, track_values):
-        track_info[k] = v
-    keys = ["track", "info"]
+    keys = ["track", "info", "extras"]
     values = [track_id, track_info]
     track_obj = {}
     for key, value in zip(keys, values):

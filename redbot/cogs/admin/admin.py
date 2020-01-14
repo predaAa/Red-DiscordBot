@@ -413,7 +413,8 @@ class Admin(commands.Cog):
         if not self.pass_user_hierarchy_check(ctx, role):
             await ctx.send(
                 _(
-                    "I cannot let you add {role.name} as a selfrole because that role is higher than or equal to your highest role in the Discord hierarchy."
+                    "I cannot let you add {role.name} as a selfrole because that role is higher than or "
+                    "equal to your highest role in the Discord hierarchy."
                 ).format(role=role)
             )
             return
@@ -435,7 +436,8 @@ class Admin(commands.Cog):
         if not self.pass_user_hierarchy_check(ctx, role):
             await ctx.send(
                 _(
-                    "I cannot let you remove {role.name} from being a selfrole because that role is higher than or equal to your highest role in the Discord hierarchy."
+                    "I cannot let you remove {role.name} from being a selfrole because that role is "
+                    "higher than or equal to your highest role in the Discord hierarchy."
                 ).format(role=role)
             )
             return

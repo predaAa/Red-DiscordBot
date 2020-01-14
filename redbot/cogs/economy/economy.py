@@ -1,6 +1,9 @@
 import calendar
 import logging
 import random
+import re
+import aiohttp
+from datetime import datetime
 from collections import defaultdict, deque, namedtuple
 from enum import Enum
 from typing import cast, Iterable, Union
@@ -128,7 +131,7 @@ class Economy(commands.Cog):
 
     default_global_settings = default_guild_settings
 
-    default_member_settings = {"next_payday": 0, "last_slot": 0}
+    default_member_settings = {"next_payday": 0, "last_slot": 0, "next_daily": 0}
 
     default_role_settings = {"PAYDAY_CREDITS": 0}
 
@@ -145,6 +148,7 @@ class Economy(commands.Cog):
         self.config.register_user(**self.default_user_settings)
         self.config.register_role(**self.default_role_settings)
         self.slot_register = defaultdict(dict)
+        self.session = aiohttp.ClientSession(loop=self.bot.loop)
 
     @guild_only_check()
     @commands.group(name="bank")
@@ -259,6 +263,15 @@ class Economy(commands.Cog):
                 )
             )
 
+    @_bank.command()
+    @checks.is_owner()
+    async def tagline(self, ctx, embedtagline):
+        """
+        Set tagline to be used with payday commands in the embed
+        """
+        await self.config.embed_tagline.set(embedtagline)
+        await ctx.send("Embed tagline set")
+
     @_bank.group(name="prune")
     @check_global_setting_admin()
     async def _prune(self, ctx):
@@ -346,52 +359,92 @@ class Economy(commands.Cog):
         """Get some free currency."""
         author = ctx.author
         guild = ctx.guild
+        embed_tagline = await self.config.embed_tagline()
+        depamount = random.randint(1, 1000)
 
         cur_time = calendar.timegm(ctx.message.created_at.utctimetuple())
+        next_daily = await self.config.user(author).next_daily()
         credits_name = await bank.get_currency_name(ctx.guild)
         if await bank.is_global():  # Role payouts will not be used
             next_payday = await self.config.user(author).next_payday()
             if cur_time >= next_payday:
                 try:
-                    await bank.deposit_credits(author, await self.config.PAYDAY_CREDITS())
+                    await bank.deposit_credits(author, depamount)
                 except errors.BalanceTooHigh as exc:
                     await bank.set_balance(author, exc.max_balance)
-                    await ctx.send(
-                        _(
-                            "You've reached the maximum amount of {currency}!"
-                            "Please spend some more \N{GRIMACING FACE}\n\n"
-                            "You currently have {new_balance} {currency}."
-                        ).format(
+                    embed = discord.Embed(
+                        title="PAYDAY \N{MONEY BAG}",
+                        description="You've reached the **maximum** amount of {currency}!\n "
+                        "Please spend some more \N{GRIMACING FACE}\n\n"
+                        "You currently have **{new_balance} {currency}.**".format(
                             currency=credits_name, new_balance=humanize_number(exc.max_balance)
-                        )
+                        ),
+                        color=await ctx.embed_color(),
                     )
+
+                    embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                    embed.set_footer(text="{}".format(embed_tagline))
+                    await ctx.send(embed=embed)
                     return
                 next_payday = cur_time + await self.config.PAYDAY_TIME()
                 await self.config.user(author).next_payday.set(next_payday)
 
                 pos = await bank.get_leaderboard_position(author)
-                await ctx.send(
-                    _(
-                        "{author.mention} Here, take some {currency}. "
-                        "Enjoy! (+{amount} {currency}!)\n\n"
-                        "You currently have {new_balance} {currency}.\n\n"
-                        "You are currently #{pos} on the global leaderboard!"
-                    ).format(
-                        author=author,
-                        currency=credits_name,
-                        amount=humanize_number(await self.config.PAYDAY_CREDITS()),
-                        new_balance=humanize_number(await bank.get_balance(author)),
-                        pos=humanize_number(pos) if pos else pos,
+                dtime = self.display_time(next_daily - cur_time)
+                if cur_time > next_daily:
+                    embed = discord.Embed(
+                        title="PAYDAY \N{MONEY BAG}",
+                        description="{author.mention} Here, take some {currency}. "
+                        "Enjoy! (**+{amount}** {currency}!)\n\n"
+                        "You currently have **{new_balance} {currency}.**\n\n"
+                        "You are currently **#{pos}** on the global leaderboard!\n\n"
+                        "**Don't forget to use the ``b!daily`` for your daily bonus!**\n\n"
+                        "Next daily bonus available now".format(
+                            author=author,
+                            currency=credits_name,
+                            amount=humanize_number(depamount),
+                            new_balance=humanize_number(await bank.get_balance(author)),
+                            pos=humanize_number(pos) if pos else pos,
+                        ),
+                        color=await ctx.embed_color(),
                     )
-                )
+
+                    embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                    embed.set_footer(text="{}".format(embed_tagline))
+                    await ctx.send(embed=embed)
+                else:
+                    embed = discord.Embed(
+                        title="PAYDAY \N{MONEY BAG}",
+                        description="{author.mention} Here, take some {currency}. "
+                        "Enjoy! (**+{amount}** {currency}!)\n\n"
+                        "You currently have **{new_balance} {currency}.**\n\n"
+                        "You are currently **#{pos}** on the global leaderboard!\n\n"
+                        "**Don't forget to use the ``b!daily`` for your daily bonus!**\n\n"
+                        "Next daily bonus available in {time}".format(
+                            author=author,
+                            currency=credits_name,
+                            amount=humanize_number(depamount),
+                            new_balance=humanize_number(await bank.get_balance(author)),
+                            pos=humanize_number(pos) if pos else pos,
+                            time=dtime,
+                        ),
+                        color=await ctx.embed_color(),
+                    )
+
+                    embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                    embed.set_footer(text="{}".format(embed_tagline))
+                    await ctx.send(embed=embed)
 
             else:
                 dtime = self.display_time(next_payday - cur_time)
-                await ctx.send(
-                    _(
-                        "{author.mention} Too soon. For your next payday you have to wait {time}."
-                    ).format(author=author, time=dtime)
+                embed = discord.Embed(
+                    description="\N{CROSS MARK} {author.mention} Too soon.\n\n For your next payday you have to wait {time}.".format(
+                        author=author, time=dtime
+                    ),
+                    color=await ctx.embed_color(),
                 )
+                embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                await ctx.send(embed=embed)
         else:
             next_payday = await self.config.member(author).next_payday()
             if cur_time >= next_payday:
@@ -403,43 +456,190 @@ class Economy(commands.Cog):
                     if role_credits > credit_amount:
                         credit_amount = role_credits
                 try:
-                    await bank.deposit_credits(author, credit_amount)
+                    await bank.deposit_credits(author, depamount)
                 except errors.BalanceTooHigh as exc:
                     await bank.set_balance(author, exc.max_balance)
-                    await ctx.send(
-                        _(
-                            "You've reached the maximum amount of {currency}!  "
-                            "Please spend some more \N{GRIMACING FACE}\n\n"
-                            "You currently have {new_balance} {currency}."
-                        ).format(
+                    embed = discord.Embed(
+                        title="PAYDAY \N{MONEY BAG}",
+                        description="You've reached the **maximum** amount of {currency}!\n "
+                        "Please spend some more \N{GRIMACING FACE}\n\n"
+                        "You currently have **{new_balance} {currency}.**".format(
                             currency=credits_name, new_balance=humanize_number(exc.max_balance)
-                        )
+                        ),
+                        color=await ctx.embed_color(),
                     )
+                    embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                    embed.set_footer(text="{}".format(embed_tagline))
+                    await ctx.send(embed=embed)
                     return
                 next_payday = cur_time + await self.config.guild(guild).PAYDAY_TIME()
                 await self.config.member(author).next_payday.set(next_payday)
                 pos = await bank.get_leaderboard_position(author)
-                await ctx.send(
-                    _(
-                        "{author.mention} Here, take some {currency}. "
-                        "Enjoy! (+{amount} {currency}!)\n\n"
-                        "You currently have {new_balance} {currency}.\n\n"
-                        "You are currently #{pos} on the global leaderboard!"
-                    ).format(
+                dtime = self.display_time(next_daily - cur_time)
+                embed = discord.Embed(
+                    title="PAYDAY \N{MONEY BAG}",
+                    description="{author.mention} Here, take some {currency}. "
+                    "Enjoy! (**+{amount}** {currency}!)\n\n"
+                    "You currently have **{new_balance} {currency}.**\n\n"
+                    "You are currently **#{pos}** on the global leaderboard!\n\n"
+                    "**Don't forget to use ``b!daily`` for your daily bonus!**\n\n"
+                    "Next daily bonus available in {time}".format(
                         author=author,
                         currency=credits_name,
-                        amount=humanize_number(credit_amount),
+                        amount=humanize_number(depamount),
                         new_balance=humanize_number(await bank.get_balance(author)),
                         pos=humanize_number(pos) if pos else pos,
-                    )
+                        time=dtime,
+                    ),
+                    color=await ctx.embed_color(),
                 )
+                embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                embed.set_footer(text="{}".format(embed_tagline))
+                await ctx.send(embed=embed)
             else:
                 dtime = self.display_time(next_payday - cur_time)
-                await ctx.send(
-                    _(
-                        "{author.mention} Too soon. For your next payday you have to wait {time}."
-                    ).format(author=author, time=dtime)
+                embed = discord.Embed(
+                    description="\N{CROSS MARK} {author.mention} Too soon.\n\n For your next payday you have to wait {time}.".format(
+                        author=author, time=dtime
+                    ),
+                    color=await ctx.embed_color(),
                 )
+                embed.set_footer(text="{}".format(embed_tagline))
+                await ctx.send(embed=embed)
+
+    @commands.command()
+    async def daily(self, ctx):
+        """
+        Check if you have voted on Top.gg in the last 12 hours and claim your reward
+        """
+        base_url = "https://api.ksoft.si/webhook/dbl/check?user={}&bot=540694922307698690".format(
+            ctx.author.id
+        )
+        headers = {"Authorization": "Bearer 99fd05f73099fa546d937075181edaf0d83c9ab1"}
+        author = ctx.author
+        cur_time = calendar.timegm(ctx.message.created_at.utctimetuple())
+        next_daily = await self.config.user(author).next_daily()
+        guild = ctx.guild
+        credits_name = await bank.get_currency_name(ctx.guild)
+        avatar = author.avatar_url_as(static_format="png")
+        emoji = discord.utils.get(self.bot.emojis, id=605196852647952394)
+        no = discord.utils.get(self.bot.emojis, id=639533861730254848)
+        bonus = random.randint(1000, 1500)
+        async with ctx.typing():
+            async with self.session.get(base_url, headers=headers) as r:
+                if r.status != 200:
+                    print(r.status)
+                    if r.status == 404:
+                        pass
+                    else:
+                        return await ctx.send("The daily vote api is down, please try again later")
+                data = await r.json()  # You might want to check if the API is up also.
+            if data["voted"] is False:
+                embed = discord.Embed(
+                    title="Vote for BB-8 every 12 hours to gain 1000 {currency}".format(
+                        currency=credits_name
+                    ),
+                    description=(
+                        "You haven't voted within the last 12 hours!\n\n [Click here](https://top.gg/bot/540694922307698690/vote)"
+                        f" to vote for BB-8 and then use `{ctx.prefix}daily` to claim your reward"  # Use ctx.prefix to get the prefix used.
+                    ),
+                    color=0xFF0000,
+                )
+                embed.set_thumbnail(url=avatar)
+                embed.set_footer(
+                    text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                )
+                await ctx.send(embed=embed)
+                return
+            # Here you don't need to use an other if statement to check if voted is True, because you used a return at the end when it's False.
+
+            if cur_time >= next_daily:
+                try:
+                    await bank.deposit_credits(author, bonus if data["data"]["weekend"] else 1000)
+                except errors.BalanceTooHigh as exc:
+                    await bank.set_balance(author, exc.max_balance)
+                    embed = discord.Embed(
+                        title="Daily \N{MONEY WITH WINGS}",
+                        description="You've reached the **maximum** amount of {currency}!\n "
+                        "Please spend some more \N{GRIMACING FACE}\n\n"
+                        "You currently have **{new_balance} {currency}.**".format(
+                            currency=credits_name, new_balance=humanize_number(exc.max_balance)
+                        ),
+                        color=0xFF0000,
+                    )
+
+                    embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                    embed.set_footer(
+                        text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                    )
+                    await ctx.send(embed=embed)
+                    return
+
+                next_daily = datetime.strptime(data["data"]["expiry"], "%Y-%m-%dT%H:%M:%S.%f")
+                await self.config.user(author).next_daily.set(int(next_daily.timestamp()))
+                pos = await bank.get_leaderboard_position(author)
+                if data["data"][
+                    "weekend"
+                ]:  # When a value is True, you can just use if with the value you want to check.
+                    embed = discord.Embed(
+                        title="Thanks for your vote {author} {emoji}".format(
+                            author=author, emoji=emoji
+                        ),
+                        description="Here is your daily bonus of {currency}. **WEEKEND BONUS +{bonus}** "
+                        "Enjoy! (**+{amount}** {currency}!)\n\n"
+                        "You currently have **{new_balance} {currency}.**\n\n"
+                        "You are currently **#{pos}** on the global leaderboard!".format(
+                            currency=credits_name,
+                            bonus=bonus,
+                            amount=humanize_number(1000 + bonus),
+                            new_balance=humanize_number(await bank.get_balance(author)),
+                            pos=humanize_number(pos) if pos else pos,
+                        ),
+                        color=0x00FF00,
+                    )
+
+                    embed.set_thumbnail(url=avatar)
+                    embed.set_footer(
+                        text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                    )
+                    await ctx.send(embed=embed)
+                    return
+
+                embed = discord.Embed(
+                    title="Thanks for your vote {author} {emoji}".format(
+                        author=author, emoji=emoji
+                    ),
+                    description="Here is your daily bonus of {currency}."
+                    "Enjoy! (**+{amount}** {currency}!)\n\n"
+                    "You currently have **{new_balance} {currency}.**\n\n"
+                    "You are currently **#{pos}** on the global leaderboard!".format(
+                        currency=credits_name,
+                        amount=humanize_number(1000),
+                        new_balance=humanize_number(await bank.get_balance(author)),
+                        pos=humanize_number(pos) if pos else pos,
+                    ),
+                    color=0x00FF00,
+                )
+                embed.set_thumbnail(url=avatar)
+                embed.set_footer(
+                    text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                )
+                await ctx.send(embed=embed)
+
+            else:
+                dtime = self.display_time(next_daily - cur_time)
+                embed = discord.Embed(
+                    description="{no} {author.mention} Too soon.\n\n You've already claimed your daily reward for voting on [top.gg](https://top.gg/bot/540694922307698690/vote).\n\n"
+                    "You have to wait {time} for your next reward".format(
+                        no=no, author=author, time=dtime
+                    ),
+                    color=0xFF0000,
+                )
+                embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                embed.set_footer(
+                    text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                )
+                await ctx.send(embed=embed)
 
     @commands.command()
     @guild_only_check()
@@ -565,7 +765,7 @@ class Economy(commands.Cog):
             await ctx.send(_("You're on cooldown, try again in a bit."))
             return
         if not valid_bid:
-            await ctx.send(_("That's an invalid bid amount, sorry :/"))
+            await ctx.send(_("\N{CROSS MARK} That's an invalid bid amount, sorry :/"))
             return
         if not await bank.can_spend(author, bid):
             await ctx.send(_("You ain't got enough money, friend."))
@@ -590,13 +790,13 @@ class Economy(commands.Cog):
             (reels[0][2], reels[1][2], reels[2][2]),
         )
 
-        slot = "~~\n~~"  # Mobile friendly
+        slot = "\n\n"  # Mobile friendly
         for i, row in enumerate(rows):  # Let's build the slot to show
             sign = "║  "
             if i == 1:
                 sign = "║◄"
             slot += "║ {} ¦ {} ¦ {} {}\n".format(
-                *[c.value for c in row], sign   # pylint: disable=no-member
+                *[c.value for c in row], sign  # pylint: disable=no-member
             )
 
         payout = PAYOUTS.get(rows[1])
@@ -622,38 +822,52 @@ class Economy(commands.Cog):
                 await bank.set_balance(author, now)
             except errors.BalanceTooHigh as exc:
                 await bank.set_balance(author, exc.max_balance)
-                await channel.send(
-                    _(
-                        "You've reached the maximum amount of {currency}! "
-                        "Please spend some more \N{GRIMACING FACE}\n{old_balance} -> {new_balance}!"
-                    ).format(
+                embed = discord.Embed(
+                    title="Imperial Casino \N{SLOT MACHINE}",
+                    description="You've reached the **maximum** amount of {currency}!\n\n "
+                    "Please spend some more \N{GRIMACING FACE}\n\n**{old_balance}** -> **{new_balance}**!".format(
                         currency=await bank.get_currency_name(getattr(channel, "guild", None)),
                         old_balance=humanize_number(then),
                         new_balance=humanize_number(exc.max_balance),
-                    )
+                    ),
+                    color=0x49FF00,
                 )
+                embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+                embed.set_footer(
+                    text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+                )
+                await channel.send(embed=embed)
                 return
+
             phrase = T_(payout["phrase"])
         else:
             then = await bank.get_balance(author)
             await bank.withdraw_credits(author, bid)
             now = then - bid
             phrase = _("Nothing!")
-        await channel.send(
-            (
-                "{slot}\n{author.mention} {phrase}\n\n"
-                + _("Your bid: {bid}")
-                + _("\n{old_balance} - {bid} (Your bid) + {pay} (Winnings) → {new_balance}!")
-            ).format(
-                slot=slot,
+        embed = discord.Embed(
+            title="Imperial Casino \N{SLOT MACHINE}",
+            description="{slot}".format(slot=slot),
+            color=0x49FF00,
+        )
+        embed.add_field(
+            name="Slot Payout",
+            value="{author.mention} **{phrase}**\n\n"
+            "Your bid: **{bid}**"
+            "\n\n**{old_balance}** - {bid} (Your bid) + {pay} (Winnings) → **{new_balance}!**".format(
                 author=author,
                 phrase=phrase,
                 bid=humanize_number(bid),
                 old_balance=humanize_number(then),
                 new_balance=humanize_number(now),
                 pay=humanize_number(pay),
-            )
+            ),
         )
+        embed.set_thumbnail(url="https://i.imgur.com/ZdrFNIw.png")
+        embed.set_footer(
+            text="Powered by Imperial Credits! If found report rebel scum to your nearest stormtrooper"
+        )
+        await channel.send(embed=embed)
 
     @commands.group()
     @guild_only_check()
