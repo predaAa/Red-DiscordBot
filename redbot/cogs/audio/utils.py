@@ -2,11 +2,8 @@ import asyncio
 import contextlib
 import functools
 import re
-import tarfile
 import time
-import zipfile
 from enum import Enum, unique
-from io import BytesIO
 from typing import MutableMapping, Optional, TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -16,7 +13,7 @@ import lavalink
 from redbot.core import Config, commands
 from redbot.core.bot import Red
 from redbot.core.i18n import Translator
-from redbot.core.utils.chat_formatting import bold, box
+from redbot.core.utils.chat_formatting import box
 from discord.utils import escape_markdown as escape
 
 from .audio_dataclasses import Query
@@ -130,7 +127,6 @@ async def draw_time(ctx) -> str:
     saber1 = str(discord.utils.get(_bot.emojis, id=632678611148865548))
     saber2 = str(discord.utils.get(_bot.emojis, id=632678634280452106))
     saber3 = str(discord.utils.get(_bot.emojis, id=632678653116940298))
-    bb8 = discord.utils.get(_bot.emojis, id=605196852647952394)
     tiefighter = discord.utils.get(_bot.emojis, id=632674535774355486)
     player = lavalink.get_player(ctx.guild.id)
     paused = player.paused
@@ -139,12 +135,11 @@ async def draw_time(ctx) -> str:
     sections = 12
     loc_time = round((pos / dur) * sections)
     bar = "\N{BOX DRAWINGS HEAVY HORIZONTAL}"
-    seek = "\N{RADIO BUTTON}"
     hit_loc = False
     if paused:
-        msg = "{}{}".format(tiefighter, saber1)
+        msg = f"{tiefighter}{saber1}"
     else:
-        msg = "{}".format(saber1)
+        msg = f"{saber1}"
     for i in range(sections):
         if i == loc_time:
             hit_loc = True
@@ -223,7 +218,7 @@ async def clear_react(bot: Red, message: discord.Message, emoji: MutableMapping 
 def get_track_description(track) -> Optional[str]:
     if track and getattr(track, "uri", None):
         query = Query.process_input(track.uri)
-        if query.is_local:
+        if query.is_local or "localtracks/" in track.uri:
             if track.title != "Unknown title":
                 return f'**{escape(f"{track.author} - {track.title}")}**' + escape(
                     f"\n{query.to_string_user()} "
@@ -239,7 +234,7 @@ def get_track_description(track) -> Optional[str]:
 def get_track_description_unformatted(track) -> Optional[str]:
     if track and hasattr(track, "uri"):
         query = Query.process_input(track.uri)
-        if query.is_local:
+        if query.is_local or "localtracks/" in track.uri:
             if track.title != "Unknown title":
                 return escape(f"{track.author} - {track.title}")
             else:

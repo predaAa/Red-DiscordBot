@@ -4,9 +4,7 @@ import codecs
 import datetime
 import logging
 import traceback
-import asyncio
 import time
-import discord
 from datetime import timedelta
 
 import aiohttp
@@ -20,7 +18,7 @@ from .. import __version__ as red_version, version_info as red_version_info, Ver
 from . import commands
 from .config import get_latest_confs
 from .utils._internal_utils import fuzzy_command_search, format_fuzzy_results
-from .utils.chat_formatting import inline, bordered, format_perms_list, humanize_timedelta
+from .utils.chat_formatting import bordered, format_perms_list, humanize_timedelta
 from .utils import menus
 
 log = logging.getLogger("red")
@@ -149,7 +147,6 @@ def init_events(bot, cli_flags):
 
     @bot.event
     async def on_command_error(ctx, error, unhandled_by_cog=False):
-
         if not unhandled_by_cog:
             if hasattr(ctx.command, "on_error"):
                 return
@@ -189,7 +186,11 @@ def init_events(bot, cli_flags):
                 ctx.command.qualified_name, error.original
             )
             message += "```" + "\n"
-            message += "Use the ``b!support`` command \nThen join the support server and the owner of the bot or a mod will help you when they are available"
+            message += (
+                "Use the ``b!support`` command \n"
+                "Then join the support server and the owner of the bot "
+                "or a mod will help you when they are available"
+            )
 
             exception_log = "Exception in command '{}'\n" "".format(ctx.command.qualified_name)
             exception_log += "".join(

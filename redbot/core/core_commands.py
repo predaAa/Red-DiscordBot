@@ -373,7 +373,7 @@ class Core(commands.Cog, CoreLogic):
         phrases = choice(
             [
                 "Flying with Poe for: ",
-                "Service the resistance for: ",
+                "Serving the resistance for: ",
                 "Fixing X-Wings for: ",
                 "Fighting the Empire for: ",
                 "Hanging out with R2D2 and C3PO for: ",
@@ -896,6 +896,32 @@ class Core(commands.Cog, CoreLogic):
             )
             for page in pagify(settings):
                 await ctx.send(box(page))
+
+    @checks.is_owner()
+    @_set.command(name="description")
+    async def setdescription(self, ctx: commands.Context, *, description: str = ""):
+        """
+        Sets the bot's description.
+        Use without a description to reset.
+        This is shown in a few locations, including the help menu.
+
+        The default is "Red V3"
+        """
+        if not description:
+            await ctx.bot._config.description.clear()
+            ctx.bot.description = "Red V3"
+            await ctx.send(_("Description reset."))
+        elif len(description) > 250:  # While the limit is 256, we bold it adding characters.
+            await ctx.send(
+                _(
+                    "This description is too long to properly display. "
+                    "Please try again with below 250 characters"
+                )
+            )
+        else:
+            await ctx.bot._config.description.set(description)
+            ctx.bot.description = description
+            await ctx.tick()
 
     @_set.command()
     @checks.guildowner()
@@ -2342,16 +2368,20 @@ class Core(commands.Cog, CoreLogic):
         author_repo = "https://github.com/Twentysix26"
         embed = discord.Embed(
             title="BB-8 Credits",
-            description="Credits for all of the people who have made various cogs for the bot and have helped to make it what is is today!",
+            description=(
+                "Credits for all of the people who have made various cogs for the bot and "
+                "have helped to make it what is is today!"
+            ),
             color=await ctx.embed_color(),
         )
         embed.add_field(
             name="Red Discord Bot:",
-            value="BB-8 is a custom fork of [Red, an open source Discord bot]({}) "
-            "created by [Twentysix]({}) and [improved by many]({}).\n\n"
-            "To run your own instance of red checkout the docs at https://red-discordbot.readthedocs.io/en/stable/index.html".format(
-                red_repo, author_repo, org_repo
-            ),
+            value=(
+                "BB-8 is a custom fork of [Red, an open source Discord bot]({}) "
+                "created by [Twentysix]({}) and [improved by many]({}).\n\n"
+                "To run your own instance of red checkout the docs at "
+                "https://red-discordbot.readthedocs.io/en/stable/index.html"
+            ).format(red_repo, author_repo, org_repo),
         )
         embed.add_field(
             name="Cog Creators:",
