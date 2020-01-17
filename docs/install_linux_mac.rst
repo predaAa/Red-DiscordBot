@@ -19,11 +19,21 @@ Please install the pre-requirements using the commands listed for your operating
 The pre-requirements are:
  - Python 3.8.1 or greater
  - Pip 18.1 or greater
- - Git
+ - Git 2.11+
  - Java Runtime Environment 11 or later (for audio support)
 
 We also recommend installing some basic compiler tools, in case our dependencies don't provide
 pre-built "wheels" for your architecture.
+
+
+*****************
+Operating systems
+*****************
+
+.. contents::
+    :local:
+
+----
 
 .. _install-arch:
 
@@ -34,6 +44,10 @@ Arch Linux
 .. code-block:: none
 
     sudo pacman -Syu python python-pip git jre-openjdk-headless base-devel
+
+Continue by `creating-venv-linux`.
+
+----
 
 .. _install-centos:
 .. _install-rhel:
@@ -50,6 +64,8 @@ CentOS and RHEL 7
       openssl-devel xz xz-devel libffi-devel findutils git2u java-11-openjdk
 
 Complete the rest of the installation by `installing Python 3.8 with pyenv <install-python-pyenv>`.
+
+----
 
 .. _install-debian-stretch:
 
@@ -76,6 +92,8 @@ Debian Stretch. This guide will tell you how. First, run the following commands:
 
 Complete the rest of the installation by `installing Python 3.8 with pyenv <install-python-pyenv>`.
 
+----
+
 .. _install-debian:
 .. _install-raspbian:
 
@@ -96,6 +114,8 @@ Debian/Raspbian Buster. This guide will tell you how. First, run the following c
 
 Complete the rest of the installation by `installing Python 3.8 with pyenv <install-python-pyenv>`.
 
+----
+
 .. _install-fedora:
 
 ~~~~~~~~~~~~
@@ -108,6 +128,10 @@ them with dnf:
 .. code-block:: none
 
     sudo dnf -y install python38 git java-latest-openjdk-headless @development-tools
+
+Continue by `creating-venv-linux`.
+
+----
 
 .. _install-mac:
 
@@ -134,6 +158,10 @@ one-by-one:
 
 It's possible you will have network issues. If so, go in your Applications folder, inside it, go in
 the Python 3.8 folder then double click ``Install certificates.command``.
+
+Continue by `creating-venv-linux`.
+
+----
 
 .. _install-opensuse:
 
@@ -175,6 +203,8 @@ Now, install pip with easy_install:
 
     sudo /opt/python/bin/easy_install-3.8 pip
 
+Continue by `creating-venv-linux`.
+
 openSUSE Tumbleweed
 *******************
 
@@ -186,18 +216,28 @@ with zypper:
     sudo zypper install python3-base python3-pip git-core java-12-openjdk-headless
     sudo zypper install -t pattern devel_basis
 
+Continue by `creating-venv-linux`.
+
+----
+
 .. _install-ubuntu:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Ubuntu LTS versions (18.04 and 16.04)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We recommend adding the ``deadsnakes`` ppa to install Python 3.8.1 or greater:
+We recommend adding the ``git-core`` ppa to install Git 2.11 or greater:
 
 .. code-block:: none
 
     sudo apt update
     sudo apt install software-properties-common
+    sudo add-apt-repository ppa:git-core/ppa
+
+We recommend adding the ``deadsnakes`` ppa to install Python 3.8.1 or greater:
+
+.. code-block:: none
+
     sudo add-apt-repository ppa:deadsnakes/ppa
 
 Now install the pre-requirements with apt:
@@ -207,30 +247,43 @@ Now install the pre-requirements with apt:
     sudo apt -y install python3.8 python3.8-dev python3.8-venv python3-pip git default-jre-headless \
       build-essential
 
+Continue by `creating-venv-linux`.
+
+----
+
 .. _install-ubuntu-non-lts:
 
 ~~~~~~~~~~~~~~~~~~~~~~~
 Ubuntu non-LTS versions
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-We recommend installing pyenv as a method of installing non-native versions of python on
-non-LTS versions of Ubuntu. This guide will tell you how. First, run the following commands:
+We recommend adding the ``git-core`` ppa to install Git 2.11 or greater:
 
 .. code-block:: none
 
     sudo apt update
+    sudo apt install software-properties-common
+    sudo add-apt-repository ppa:git-core/ppa
+
+Now, to install non-native version of python on non-LTS versions of Ubuntu, we recommend
+installing pyenv. To do this, first run the following commands:
+
+.. code-block:: none
+
     sudo apt -y install make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
       libsqlite3-dev wget curl llvm libncurses5-dev xz-utils tk-dev libxml2-dev \
       libxmlsec1-dev libffi-dev liblzma-dev libgdbm-dev uuid-dev python3-openssl git openjdk-11-jre
     CXX=/usr/bin/g++
 
-Complete the rest of the installation by `installing Python 3.8 with pyenv <install-python-pyenv>`.
+And then complete the rest of the installation by `installing Python 3.8 with pyenv <install-python-pyenv>`.
+
+----
 
 .. _install-python-pyenv:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+****************************
 Installing Python with pyenv
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+****************************
 
 .. note::
 
@@ -267,6 +320,10 @@ After that is finished, run:
     pyenv global 3.8.1
 
 Pyenv is now installed and your system should be configured to run Python 3.8.
+
+Continue by `creating-venv-linux`.
+
+.. _creating-venv-linux:
 
 ------------------------------
 Creating a Virtual Environment
