@@ -372,7 +372,7 @@ class Core(commands.Cog, CoreLogic):
         phrases = choice(
             [
                 "Flying with Poe for: ",
-                "Service the resistance for: ",
+                "Serving the resistance for: ",
                 "Fixing X-Wings for: ",
                 "Fighting the Empire for: ",
                 "Hanging out with R2D2 and C3PO for: ",
