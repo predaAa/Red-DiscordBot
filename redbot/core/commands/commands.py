@@ -11,7 +11,6 @@ from typing import Awaitable, Callable, Dict, List, Optional, Tuple, Union, TYPE
 import discord
 from discord.ext import commands
 
-from . import converter as converters
 from .errors import ConversionFailure
 from .requires import PermState, PrivilegeLevel, Requires
 from ..i18n import Translator

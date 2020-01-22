@@ -8,6 +8,8 @@ import getpass
 import json
 import logging
 import os
+from typing import NoReturn
+
 import pip
 import platform
 import shutil
@@ -16,7 +18,6 @@ import sys
 from argparse import Namespace
 from copy import deepcopy
 from pathlib import Path
-from typing import NoReturn
 
 import discord
 
@@ -288,10 +289,10 @@ def handle_edit(cli_flags: Namespace):
         sys.exit(0)
 
 
-async def run_bot(red: Red, cli_flags: Namespace) -> None:
+async def run_bot(red: Red, cli_flags: Namespace) -> NoReturn:
     """
     This runs the bot.
-    
+
     Any shutdown which is a result of not being able to log in needs to raise
     a SystemExit exception.
 
@@ -355,8 +356,6 @@ async def run_bot(red: Red, cli_flags: Namespace) -> None:
                 print("Token has been reset.")
                 sys.exit(0)
         sys.exit(1)
-
-    return None
 
 
 def handle_early_exit_flags(cli_flags: Namespace):
