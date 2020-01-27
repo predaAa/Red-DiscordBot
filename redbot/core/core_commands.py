@@ -125,7 +125,7 @@ class CoreLogic:
             else:
                 await bot.add_loaded_package(name)
                 loaded_packages.append(name)
-                # remove in Red 3.3
+                # remove in Red 3.4
                 downloader = bot.get_cog("Downloader")
                 if downloader is None:
                     continue
@@ -318,7 +318,10 @@ class Core(commands.Cog, CoreLogic):
         python_version = "[{}.{}.{}]({})".format(*sys.version_info[:3], python_url)
         red_version = "[{}]({})".format(__version__, red_pypi)
         app_info = await self.bot.application_info()
-        owner = app_info.owner
+        if app_info.team:
+            owner = app_info.team.name
+        else:
+            owner = app_info.owner
         custom_info = await self.bot._config.custom_info()
         discord_server = "https://discord.gg/TEeXcDY"
 
@@ -415,6 +418,9 @@ class Core(commands.Cog, CoreLogic):
             if ctx.guild:
                 guild_setting = await self.bot._config.guild(ctx.guild).embeds()
                 text += _("Guild setting: {}\n").format(guild_setting)
+            if ctx.channel:
+                channel_setting = await self.bot._config.channel(ctx.channel).embeds()
+                text += _("Channel setting: {}\n").format(channel_setting)
             user_setting = await self.bot._config.user(ctx.author).embeds()
             text += _("User setting: {}").format(user_setting)
             await ctx.send(box(text))
@@ -456,6 +462,31 @@ class Core(commands.Cog, CoreLogic):
         else:
             await ctx.send(
                 _("Embeds are now {} for this guild.").format(
+                    _("enabled") if enabled else _("disabled")
+                )
+            )
+
+    @embedset.command(name="channel")
+    @checks.guildowner_or_permissions(administrator=True)
+    @commands.guild_only()
+    async def embedset_channel(self, ctx: commands.Context, enabled: bool = None):
+        """
+        Toggle the channel's embed setting.
+
+        If enabled is None, the setting will be unset and
+        the guild default will be used instead.
+
+        If set, this is used instead of the guild default
+        to determine whether or not to use embeds. This is
+        used for all commands done in a channel except
+        for help commands.
+        """
+        await self.bot._config.channel(ctx.channel).embeds.set(enabled)
+        if enabled is None:
+            await ctx.send(_("Embeds will now fall back to the global setting."))
+        else:
+            await ctx.send(
+                _("Embeds are now {} for this channel.").format(
                     _("enabled") if enabled else _("disabled")
                 )
             )
@@ -704,13 +735,13 @@ class Core(commands.Cog, CoreLogic):
             if len(repos_with_shared_libs) == 1:
                 formed = _(
                     "**WARNING**: The following repo is using shared libs"
-                    " which are marked for removal in Red 3.3: {repo}.\n"
+                    " which are marked for removal in Red 3.4: {repo}.\n"
                     "You should inform maintainer of the repo about this message."
                 ).format(repo=inline(repos_with_shared_libs.pop()))
             else:
                 formed = _(
                     "**WARNING**: The following repos are using shared libs"
-                    " which are marked for removal in Red 3.3: {repos}.\n"
+                    " which are marked for removal in Red 3.4: {repos}.\n"
                     "You should inform maintainers of these repos about this message."
                 ).format(repos=humanize_list([inline(repo) for repo in repos_with_shared_libs]))
             output.append(formed)
@@ -822,13 +853,13 @@ class Core(commands.Cog, CoreLogic):
             if len(repos_with_shared_libs) == 1:
                 formed = _(
                     "**WARNING**: The following repo is using shared libs"
-                    " which are marked for removal in Red 3.3: {repo}.\n"
+                    " which are marked for removal in Red 3.4: {repo}.\n"
                     "You should inform maintainers of these repos about this message."
                 ).format(repo=inline(repos_with_shared_libs.pop()))
             else:
                 formed = _(
                     "**WARNING**: The following repos are using shared libs"
-                    " which are marked for removal in Red 3.3: {repos}.\n"
+                    " which are marked for removal in Red 3.4: {repos}.\n"
                     "You should inform maintainers of these repos about this message."
                 ).format(repos=humanize_list([inline(repo) for repo in repos_with_shared_libs]))
             output.append(formed)
@@ -1505,7 +1536,9 @@ class Core(commands.Cog, CoreLogic):
                 if not destination.permissions_for(destination.guild.me).send_messages:
                     continue
                 if destination.permissions_for(destination.guild.me).embed_links:
-                    send_embed = await ctx.bot._config.guild(destination.guild).embeds()
+                    send_embed = await ctx.bot._config.channel(destination).embeds()
+                    if send_embed is None:
+                        send_embed = await ctx.bot._config.guild(destination.guild).embeds()
                 else:
                     send_embed = False
 

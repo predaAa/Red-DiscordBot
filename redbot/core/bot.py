@@ -25,10 +25,13 @@ from typing import (
     Awaitable,
     Any,
 )
+from collections import Counter
 from types import MappingProxyType
 
 import discord
+from discord.ext import commands as dpy_commands
 from discord.ext.commands import when_mentioned_or
+from discord.ext.commands.bot import BotBase
 
 from . import Config, i18n, commands, errors, drivers, modlog, bank
 from .cog_manager import CogManager, CogManagerUI
@@ -61,7 +64,9 @@ def _is_submodule(parent, child):
 
 
 # barely spurious warning caused by our intentional shadowing
-class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: disable=no-member
+class RedBase(
+    commands.GroupMixin, dpy_commands.bot.BotBase, RPCMixin
+):  # pylint: disable=no-member
     """Mixin for the main bot class.
 
     This exists because `Red` inherits from `discord.AutoShardedClient`, which
@@ -125,6 +130,7 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
             autoimmune_ids=[],
         )
 
+        self._config.register_channel(embeds=None)
         self._config.register_user(embeds=None)
 
         self._config.init_custom(CUSTOM_GROUPS, 2)
@@ -154,6 +160,7 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
         self._color = discord.Embed.Empty  # This is needed or color ends up 0x000000
         self._main_dir = bot_dir
         self._cog_mgr = CogManager()
+        self._use_team_features = cli_flags.use_team_features
         super().__init__(*args, help_command=None, **kwargs)
         # Do not manually use the help formatter attribute here, see `send_help_for`,
         # for a documented API. The internals of this object are still subject to change.
@@ -163,6 +170,16 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
         self._permissions_hooks: List[commands.CheckPredicate] = []
         self._red_ready = asyncio.Event()
         self._red_before_invoke_objs: Set[PreInvokeCoroutine] = set()
+
+    def get_command(self, name: str) -> Optional[commands.Command]:
+        com = super().get_command(name)
+        assert com is None or isinstance(com, commands.Command)
+        return com
+
+    def get_cog(self, name: str) -> Optional[commands.Cog]:
+        cog = super().get_cog(name)
+        assert cog is None or isinstance(cog, commands.Cog)
+        return cog
 
     @property
     def _before_invoke(self):  # DEP-WARN
@@ -623,6 +640,9 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
             if user_setting is not None:
                 return user_setting
         else:
+            channel_setting = await self._config.channel(channel).embeds()
+            if channel_setting is not None:
+                return channel_setting
             guild_setting = await self._config.guild(channel.guild).embeds()
             if guild_setting is not None:
                 return guild_setting
@@ -630,10 +650,42 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
         global_setting = await self._config.embeds()
         return global_setting
 
-    async def is_owner(self, user) -> bool:
+    async def is_owner(self, user: Union[discord.User, discord.Member]) -> bool:
+        """
+        Determines if the user should be considered a bot owner.
+
+        This takes into account CLI flags and application ownership.
+
+        By default,
+        application team members are not considered owners,
+        while individual application owners are.
+
+        Parameters
+        ----------
+        user: Union[discord.User, discord.Member]
+
+        Returns
+        -------
+        bool
+        """
         if user.id in self._co_owners:
             return True
-        return await super().is_owner(user)
+
+        if self.owner_id:
+            return self.owner_id == user.id
+        elif self.owner_ids:
+            return user.id in self.owner_ids
+        else:
+            app = await self.application_info()
+            if app.team:
+                if self._use_team_features:
+                    self.owner_ids = ids = {m.id for m in app.team.members}
+                    return user.id in ids
+            else:
+                self.owner_id = owner_id = app.owner.id
+                return user.id == owner_id
+
+        return False
 
     async def is_admin(self, member: discord.Member) -> bool:
         """Checks if a member is an admin of their guild."""
@@ -1072,10 +1124,11 @@ class RedBase(commands.GroupMixin, commands.bot.BotBase, RPCMixin):  # pylint: d
         await self.wait_until_red_ready()
         destinations = []
         opt_outs = await self._config.owner_opt_out_list()
-        for user_id in (self.owner_id, *self._co_owners):
+        team_ids = () if not self._use_team_features else self.owner_ids
+        for user_id in set((self.owner_id, *self._co_owners, *team_ids)):
             if user_id not in opt_outs:
                 user = self.get_user(user_id)
-                if user:
+                if user and not user.bot:  # user.bot is possible with flags and teams
                     destinations.append(user)
                 else:
                     log.warning(
