@@ -467,6 +467,7 @@ class PlaylistInterface:
 class QueueInterface:
     def __init__(self):
         self.cursor = database_connection.cursor()
+        self.database = database_connection
         self.cursor.execute(PRAGMA_SET_temp_store)
         self.cursor.execute(PRAGMA_SET_journal_mode)
         self.cursor.execute(PRAGMA_SET_read_uncommitted)
@@ -480,12 +481,25 @@ class QueueInterface:
 
     async def fetch(self) -> List[QueueFetchResult]:
         output = []
-        for index, row in enumerate(self.cursor.execute(PERSIST_QUEUE_FETCH_ALL), start=1):
-            if index % 50 == 0:
-                await asyncio.sleep(0.01)
-            output.append(QueueFetchResult(*row))
-            await asyncio.sleep(0)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            for future in concurrent.futures.as_completed(
+                    [
+                        executor.submit(
+                            self.database.cursor().execute,
+                            PERSIST_QUEUE_FETCH_ALL,
+                        )
+                    ]
+            ):
+                try:
+                    row_result = future.result()
+                except Exception as exc:
+                    debug_exc_log(log, exc, "Failed to completed fetch from database")
 
+            for index, row in enumerate(row_result, start=1):
+                if index % 50 == 0:
+                    await asyncio.sleep(0.01)
+                output.append(PlaylistFetchResult(*row))
+                await asyncio.sleep(0)
         return output
 
     def played(self, guild_id: int, track_id: str):
