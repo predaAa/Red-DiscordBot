@@ -2,12 +2,10 @@ import asyncio
 import base64
 import contextlib
 import datetime
-import hashlib
 import json
 import logging
 import random
 import time
-import uuid
 import urllib.parse
 from collections import namedtuple
 from typing import Callable, List, MutableMapping, Optional, TYPE_CHECKING, Tuple, Union, NoReturn
@@ -77,16 +75,10 @@ class AudioDBAPI:
         _WRITE_GLOBAL_API_ACCESS = self.api_key is not None
         id_list = list(_bot._co_owners)
         id_list.append(_bot.owner_id)
-        self._handshake_token = "||".join(list(map(self.uuid_from_id, id_list)))
+        self._handshake_token = "||".join(map(str, id_list))
         return self.api_key
 
-    @staticmethod
-    def uuid_from_id(seed: str) -> str:
-        m = hashlib.md5()
-        m.update(f"{seed}".encode("utf-8"))
-        return f"{uuid.UUID(m.hexdigest())}"
-
-    async def get_call(self, query: Optional[audio_dataclasses.Query] = None) -> Optional[dict]:
+    async def get_call(self, query: Optional[audio_dataclasses.Query] = None) -> dict:
         api_url = f"{_API_URL}api/v1/queries"
         try:
             query = audio_dataclasses.Query.process_input(query)
@@ -99,8 +91,8 @@ class AudioDBAPI:
                 async with self.session.get(
                     api_url,
                     timeout=aiohttp.ClientTimeout(total=await _config.global_db_get_timeout()),
-                    headers={"X-Token": self._handshake_token},
-                    params={"query": urllib.parse.quote(query)},
+                        headers={"Authorization": self.api_key, "X-Token": self._handshake_token},
+                        params={"query": urllib.parse.quote(query)},
                 ) as r:
                     search_response = await r.json()
                     if IS_DEBUG and "x-process-time" in r.headers:
@@ -115,7 +107,7 @@ class AudioDBAPI:
             debug_exc_log(log, err, f"Failed to Get query: {api_url}/{query}")
         return {}
 
-    async def get_spotify(self, title: str, author: Optional[str]) -> Optional[dict]:
+    async def get_spotify(self, title: str, author: Optional[str]) -> dict:
         api_url = f"{_API_URL}api/v1/queries/spotify"
         try:
             search_response = "error"
@@ -125,8 +117,8 @@ class AudioDBAPI:
                 async with self.session.get(
                     api_url,
                     timeout=aiohttp.ClientTimeout(total=await _config.global_db_get_timeout()),
-                    headers={"X-Token": self._handshake_token},
-                    params=params,
+                        headers={"Authorization": self.api_key, "X-Token": self._handshake_token},
+                        params=params,
                 ) as r:
                     search_response = await r.json()
                     if IS_DEBUG and "x-process-time" in r.headers:
@@ -135,7 +127,7 @@ class AudioDBAPI:
                             f"Status code {r.status} || {title} - {author}"
                         )
             if "tracks" not in search_response:
-                return None
+                return {}
             return search_response
         except Exception as err:
             debug_exc_log(log, err, f"Failed to Get query: {api_url}")
@@ -147,13 +139,16 @@ class AudioDBAPI:
         try:
             query = audio_dataclasses.Query.process_input(query)
             if llresponse.has_error or llresponse.load_type.value in ["NO_MATCHES", "LOAD_FAILED"]:
+                await asyncio.sleep(0)
                 return
-            if query and query.valid and not query.is_local and not query.is_spotify:
+            if query and query.valid and query.is_youtube:
                 query = query.lavalink_query
             else:
+                await asyncio.sleep(0)
                 return None
             await self._get_api_key()
             if self.api_key is None:
+                await asyncio.sleep(0)
                 return None
             api_url = f"{_API_URL}api/v1/queries"
             async with self.session.post(
@@ -170,6 +165,7 @@ class AudioDBAPI:
                     )
         except Exception as err:
             debug_exc_log(log, err, f"Failed to post query: {query}")
+        await asyncio.sleep(0)
 
 
 class SpotifyAPI:
@@ -676,15 +672,14 @@ class MusicCache:
                 val = None
                 llresponse = None
                 if youtube_cache:
-                    update = True
-                    with contextlib.suppress(SQLError):
-                        (val, update) = await self.database.fetch_one(
+                    try:
+                        (val, last_updated) = await self.database.fetch_one(
                             "youtube", "youtube_url", {"track": track_info}
                         )
-                    if update:
-                        val = None
+                    except Exception as exc:
+                        debug_exc_log(log, exc, f"Failed to fetch {track_info} from YouTube table")
                 should_query_global = (
-                    globaldb_toggle and not update and query_global and val is None
+                        globaldb_toggle and query_global and val is None
                 )
                 if should_query_global:
                     llresponse = await self.audio_api.get_spotify(track_name, artist_name)
@@ -700,7 +695,6 @@ class MusicCache:
                 if youtube_cache and val and llresponse is None:
                     task = ("update", ("youtube", {"track": track_info}))
                     self.append_task(ctx, *task)
-
                 if llresponse:
                     track_object = llresponse.tracks
                 elif val:
@@ -1198,10 +1192,12 @@ class MusicCache:
             if data.get("loadType") == "V2_COMPACT":
                 data["loadType"] = "V2_COMPAT"
             results = LoadResult(data)
+            await asyncio.sleep(0)
             with contextlib.suppress(Exception):
                 if not _raw_query.is_local and not results.has_error and len(results.tracks) >= 1:
                     global_task = dict(llresponse=results, query=_raw_query)
                     tasks.append(global_task)
+                    await asyncio.sleep(0)
                 if i % 1000 == 0:
                     if IS_DEBUG:
                         log.debug("Running pending writes to database")
@@ -1211,6 +1207,6 @@ class MusicCache:
                     tasks = []
                     if IS_DEBUG:
                         log.debug("Pending writes to database have finished")
-            if i % 1000 == 0:
+            if i % 100 == 0:
                 await asyncio.sleep(5)
         await ctx.tick()
