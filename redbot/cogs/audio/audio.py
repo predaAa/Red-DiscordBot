@@ -8299,7 +8299,7 @@ class Audio(commands.Cog):
                             await p.pause(False)
                         except Exception as err:
                             debug_exc_log(
-                                log, err, "Exception raised in Audio's emptypause_timer for: {sid}"
+                                log, err, f"Exception raised in Audio's emptypause_timer for: {sid}"
                             )
                     pause_times.pop(server.id, None)
             servers = stop_times.copy()
