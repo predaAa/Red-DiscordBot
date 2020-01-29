@@ -395,7 +395,7 @@ WHERE
     last_fetched > :day
     AND last_updated > :maxage
 ORDER BY RANDOM()
-LIMIT 10
+LIMIT 1
 ;
 """
 LAVALINK_DELETE_OLD_ENTRIES = """

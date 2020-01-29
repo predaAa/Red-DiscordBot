@@ -73,7 +73,6 @@ red_extras = version_info.to_json()
 red_extras.update({"major": 1, "minor": 1, "micro": 1})
 __version__ = VersionInfo.from_json(red_extras)
 
-__version__ = "1.1.1"
 __author__ = ["aikaterna", "Draper"]
 
 log = logging.getLogger("red.cogs.Audio")
