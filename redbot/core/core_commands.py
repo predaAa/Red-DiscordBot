@@ -336,7 +336,7 @@ class Core(commands.Cog, CoreLogic):
             "For support with this bot please join my support [discord server]({})\n\n"
             "This fork has numerous modifications to core Red. Some may get merged into "
             "the main project via PR at a later date, but most changes are custom for {}\n\n"
-            "Orginial Copyright to (c) Cog Creators"
+            "Original Copyright to (c) Cog Creators"
             "".format(red_repo, author_repo, org_repo, discord_server, ctx.bot.user.name)
         )
 
