@@ -498,7 +498,7 @@ class QueueInterface:
             for index, row in enumerate(row_result, start=1):
                 if index % 50 == 0:
                     await asyncio.sleep(0.01)
-                output.append(PlaylistFetchResult(*row))
+                output.append(QueueFetchResult(*row))
                 await asyncio.sleep(0)
         return output
 

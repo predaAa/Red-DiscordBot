@@ -7212,7 +7212,9 @@ class Audio(commands.Cog):
                         )
                 track_len = 0
                 empty_queue = not player.queue
-                for track in tracks:
+                for i, track in enumerate(tracks, start=1):
+                    if i % 500 == 0:  # TODO: Improve when Toby menu's are merged
+                        await asyncio.sleep(0.1)
                     if len(player.queue) >= 10000:
                         continue
                     if not await is_allowed(
@@ -8299,7 +8301,7 @@ class Audio(commands.Cog):
                             await p.pause(False)
                         except Exception as err:
                             debug_exc_log(
-                                log, err, f"Exception raised in Audio's emptypause_timer for: {sid}"
+                                log, err, "Exception raised in Audio's emptypause_timer."
                             )
                     pause_times.pop(server.id, None)
             servers = stop_times.copy()
@@ -8315,9 +8317,7 @@ class Audio(commands.Cog):
                             await player.stop()
                             await player.disconnect()
                         except Exception as err:
-                            debug_exc_log(
-                                log, err, f"Exception raised in Audio's emptydc_timer for: {sid}"
-                            )
+                            debug_exc_log(log, err, "Exception raised in Audio's emptydc_timer.")
                             if "No such player for that guild" in str(err):
                                 stop_times.pop(sid, None)
                 elif (
@@ -8328,13 +8328,11 @@ class Audio(commands.Cog):
                         try:
                             await lavalink.get_player(sid).pause()
                         except Exception as err:
-                            debug_exc_log(
-                                log,
-                                err,
-                                f"Exception raised in Audio's emptypause_timer for : {sid}",
-                            )
                             if "No such player for that guild" in str(err):
                                 pause_times.pop(sid, None)
+                            debug_exc_log(
+                                log, err, "Exception raised in Audio's emptypause_timer."
+                            )
             await asyncio.sleep(5)
 
     async def _embed_msg(self, ctx: commands.Context, **kwargs):
@@ -8570,9 +8568,9 @@ class Audio(commands.Cog):
                 pass
 
     @commands.Cog.listener()
-    async def on_red_audio_track_enqueue(
-        self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
-    ):
+    async def on_red_audio_track_enqueue(self, guild: discord.Guild, track, requester):
+        if not (track and guild):
+            return
         persist_cache = self._persist_queue_cache.setdefault(
             guild.id, await self.config.guild(guild).persist_queue()
         )
@@ -8585,6 +8583,8 @@ class Audio(commands.Cog):
     async def on_red_audio_queue_end(
         self, guild: discord.Guild, track: lavalink.Track, requester: discord.Member
     ):
+        if not (track and guild):
+            return
         self.music_cache.persist_queue.drop(guild.id)
         await asyncio.sleep(5)
         await self.music_cache.database.clean_up_old_entries()
@@ -8632,7 +8632,8 @@ class Audio(commands.Cog):
                         except IndexError:
                             await asyncio.sleep(5)
                             tries += 5
-                        except Exception:
+                        except Exception as exc:
+                            debug_exc_log(log, exc, "Failed to restore music voice channel")
                             if vc is None:
                                 break
 

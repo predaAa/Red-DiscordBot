@@ -22,7 +22,6 @@ from redbot.core.i18n import Translator, cog_i18n
 from . import audio_dataclasses
 from .databases import CacheGetAllLavalink, CacheInterface, QueueInterface, SQLError
 from .debug import is_debug, debug_exc_log
-
 from .errors import DatabaseError, SpotifyFetchError, TrackEnqueueError, YouTubeApiError
 from .playlists import get_playlist
 from .utils import CacheLevel, Notifier, is_allowed, queue_duration, track_limit
@@ -617,6 +616,7 @@ class MusicCache:
         has_not_allowed = False
         await self.audio_api._get_api_key()
         globaldb_toggle = await _config.global_db_enabled()
+        global_entry = globaldb_toggle and query_global
         try:
             current_cache_level = CacheLevel(await self.config.cache_level())
             guild_data = await self.config.guild(ctx.guild).all()
@@ -736,7 +736,7 @@ class MusicCache:
                         seconds=seconds,
                     )
 
-                if consecutive_fails >= 10:
+                if (consecutive_fails >= 10 and global_entry is False) or (consecutive_fails >= 100 and global_entry is True):
                     error_embed = discord.Embed(
                         colour=await ctx.embed_colour(),
                         title=_("Failing to get tracks, skipping remaining."),
