@@ -74,6 +74,18 @@ async def interactive_config(red, token_set, prefix_set, *, print_header=True):
     return token
 
 
+def positive_int(arg: str) -> int:
+    try:
+        x = int(arg)
+    except ValueError:
+        raise argparse.ArgumentTypeError("Message cache size has to be a number.")
+    if x <= 0:
+        raise argparse.ArgumentTypeError("Message cache size has to be greater than 0.")
+    if x > sys.maxsize:
+        raise argparse.ArgumentTypeError(f"Message cache size has to be lower than {sys.maxsize}.")
+    return x
+
+
 def parse_cli_flags(args):
     parser = argparse.ArgumentParser(
         description="Red - Discord Bot", usage="redbot <instance_name> [arguments]"
@@ -211,6 +223,20 @@ def parse_cli_flags(args):
             "Do not enable if you would not trust all of your team members with "
             "all of the data on the host machine."
         ),
+    )
+    parser.add_argument(
+        "--message-cache-size",
+        type=positive_int,
+        default=1000,
+        help="Set the maximum number of messages to store in the internal message cache.",
+    )
+    parser.add_argument(
+        "--no-message-cache", action="store_true", help="Disable the internal message cache.",
+    )
+    parser.add_argument(
+        "--shard-count",
+        type=positive_int,
+        help="Set the number of shards the bot will launch with.",
     )
 
     args = parser.parse_args(args)
