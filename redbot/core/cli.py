@@ -79,10 +79,14 @@ def positive_int(arg: str) -> int:
         x = int(arg)
     except ValueError:
         raise argparse.ArgumentTypeError("Message cache size has to be a number.")
-    if x <= 0:
-        raise argparse.ArgumentTypeError("Message cache size has to be greater than 0.")
+    if x < 1000:
+        raise argparse.ArgumentTypeError(
+            "Message cache size has to be greater than or equal to 1000."
+        )
     if x > sys.maxsize:
-        raise argparse.ArgumentTypeError(f"Message cache size has to be lower than {sys.maxsize}.")
+        raise argparse.ArgumentTypeError(
+            f"Message cache size has to be lower than or equal to {sys.maxsize}."
+        )
     return x
 
 
@@ -102,7 +106,7 @@ def parse_cli_flags(args):
         action="store_true",
         help="Edit the instance. This can be done without console interaction "
         "by passing --no-prompt and arguments that you want to change (available arguments: "
-        "--edit-instance-name, --edit-data-path, --copy-data, --owner, --token).",
+        "--edit-instance-name, --edit-data-path, --copy-data, --owner, --token, --prefix).",
     )
     parser.add_argument(
         "--edit-instance-name",
