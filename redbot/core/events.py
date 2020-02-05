@@ -151,6 +151,16 @@ def init_events(bot, cli_flags):
         await bot.change_presence(status=discord.Status.online, activity=None)
 
     @bot.event
+    async def on_shard_ready(shard_id):
+        chan = bot.get_guild(489162733791739950).get_channel(646857954175221810)
+        shard_count = bot.shard_count
+        embed = discord.Embed(
+            description="shard {}/{} is ready".format(shard_id + 1,shard_count),
+            color=0x00FF00,
+        )
+        await chan.send(embed=embed)
+
+    @bot.event
     async def on_command_error(ctx, error, unhandled_by_cog=False):
         if not unhandled_by_cog:
             if hasattr(ctx.command, "on_error"):
