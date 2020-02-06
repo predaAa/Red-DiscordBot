@@ -5,6 +5,7 @@
 import asyncio
 import contextlib
 import functools
+import warnings
 from typing import Union, Iterable, Optional, Mapping
 import discord
 
