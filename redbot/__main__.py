@@ -429,10 +429,7 @@ def global_exception_handler(red, loop, context):
     msg = context.get("exception", context["message"])
     # These will get handled later when it *also* kills loop.run_forever
     if not isinstance(msg, (KeyboardInterrupt, SystemExit)):
-        if isinstance(msg, Exception):
-            log.critical("Caught unhandled exception in task:\n", exc_info=msg)
-        else:
-            log.critical("Caught unhandled exception in task: %s", msg)
+        log.critical("Caught unhandled exception in task: %s", msg)
 
 
 def red_exception_handler(red, red_task: asyncio.Future):
