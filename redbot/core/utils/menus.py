@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import functools
 import warnings
-from typing import Union, Iterable, Optional, Mapping
+from typing import Union, Iterable, List, Optional, Union
 import discord
 
 from .. import commands
@@ -77,7 +77,7 @@ def update_icon_adding(message: discord.Message, emojis: Iterable[_ReactableEmoj
 
 async def menu(
     ctx: commands.Context,
-    pages: list,
+    pages: Union[List[str], List[discord.Embed]],
     controls: dict,
     message: discord.Message = None,
     page: int = 0,
@@ -117,6 +117,8 @@ async def menu(
     RuntimeError
         If either of the notes above are violated
     """
+    if not isinstance(pages[0], (discord.Embed, str)):
+        raise RuntimeError("Pages must be of type discord.Embed or str")
     if not all(isinstance(x, discord.Embed) for x in pages) and not all(
         isinstance(x, str) for x in pages
     ):
