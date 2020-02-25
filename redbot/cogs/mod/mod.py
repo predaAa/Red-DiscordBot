@@ -112,10 +112,19 @@ class Mod(
             self.bot.loop.create_task(self.bot.send_to_owners(msg))
             await self.settings.version.set(__version__)
 
-    # TODO: Move this to core.
-    # This would be in .movetocore , but the double-under name here makes that more trouble
-    async def bot_check(self, ctx):
-        """Global check to see if a channel or server is ignored.
+    @commands.command()
+    @commands.is_owner()
+    async def moveignoredchannels(self, ctx: commands.Context) -> None:
+        """Move ignored channels and servers to core"""
+        all_guilds = await self.settings.all_guilds()
+        all_channels = await self.settings.all_channels()
+        for guild_id, settings in all_guilds.items():
+            await self.bot._config.guild_from_id(guild_id).ignored.set(settings["ignored"])
+            await self.settings.guild_from_id(guild_id).ignored.clear()
+        for channel_id, settings in all_channels.items():
+            await self.bot._config.channel_from_id(channel_id).ignored.set(settings["ignored"])
+            await self.settings.channel_from_id(channel_id).clear()
+        await ctx.send(_("Ignored channels and guilds restored."))
 
         Any users who have permission to use the `ignore` or `unignore` commands
         surpass the check.
