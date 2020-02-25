@@ -1721,7 +1721,7 @@ class Core(commands.Cog, CoreLogic):
         pass
 
     @whitelist.command(name="add")
-    async def whitelist_add(self, ctx, *, user: Union[discord.Member, int]):
+    async def whitelist_add(self, ctx: commands.Context, *users: Union[discord.Member, int]):
         """
         Adds a user to the whitelist.
         """
@@ -1751,7 +1751,7 @@ class Core(commands.Cog, CoreLogic):
             await ctx.send(box(page))
 
     @whitelist.command(name="remove")
-    async def whitelist_remove(self, ctx: commands.Context, *, user: Union[discord.Member, int]):
+    async def whitelist_remove(self, ctx: commands.Context, *users: Union[discord.Member, int]):
         """
         Removes user from whitelist.
         """
@@ -1784,7 +1784,7 @@ class Core(commands.Cog, CoreLogic):
         pass
 
     @blacklist.command(name="add")
-    async def blacklist_add(self, ctx: commands.Context, *, user: Union[discord.Member, int]):
+    async def blacklist_add(self, ctx: commands.Context, *users: Union[discord.Member, int]):
         """
         Adds a user to the blacklist.
         """
@@ -1818,7 +1818,7 @@ class Core(commands.Cog, CoreLogic):
             await ctx.send(box(page))
 
     @blacklist.command(name="remove")
-    async def blacklist_remove(self, ctx: commands.Context, *, user: Union[discord.Member, int]):
+    async def blacklist_remove(self, ctx: commands.Context, *users: Union[discord.Member, int]):
         """
         Removes user from blacklist.
         """
@@ -1854,7 +1854,7 @@ class Core(commands.Cog, CoreLogic):
 
     @localwhitelist.command(name="add")
     async def localwhitelist_add(
-        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role, int]
+        self, ctx: commands.Context, *users_or_roles: Union[discord.Member, discord.Role, int]
     ):
         """
         Adds a user or role to the whitelist.
@@ -1893,7 +1893,7 @@ class Core(commands.Cog, CoreLogic):
 
     @localwhitelist.command(name="remove")
     async def localwhitelist_remove(
-        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role, int]
+        self, ctx: commands.Context, *users_or_roles: Union[discord.Member, discord.Role, int]
     ):
         """
         Removes user or role from whitelist.
@@ -1939,7 +1939,7 @@ class Core(commands.Cog, CoreLogic):
 
     @localblacklist.command(name="add")
     async def localblacklist_add(
-        self, ctx: commands.Context, *, user_or_role: Union[discord.Member, discord.Role, int]
+        self, ctx: commands.Context, *users_or_roles: Union[discord.Member, discord.Role, int]
     ):
         """
         Adds a user or role to the blacklist.
