@@ -18,7 +18,7 @@ from .settings import ModSettings
 
 _ = T_ = Translator("Mod", __file__)
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 
 class CompositeMetaClass(type(commands.Cog), type(ABC)):
@@ -125,19 +125,3 @@ class Mod(
             await self.bot._config.channel_from_id(channel_id).ignored.set(settings["ignored"])
             await self.settings.channel_from_id(channel_id).clear()
         await ctx.send(_("Ignored channels and guilds restored."))
-
-        Any users who have permission to use the `ignore` or `unignore` commands
-        surpass the check.
-        """
-        perms = ctx.channel.permissions_for(ctx.author)
-        surpass_ignore = (
-            isinstance(ctx.channel, discord.abc.PrivateChannel)
-            or perms.manage_guild
-            or await ctx.bot.is_owner(ctx.author)
-            or await ctx.bot.is_admin(ctx.author)
-        )
-        if surpass_ignore:
-            return True
-        guild_ignored = await self.settings.guild(ctx.guild).ignored()
-        chann_ignored = await self.settings.channel(ctx.channel).ignored()
-        return not (guild_ignored or chann_ignored and not perms.manage_channels)
