@@ -5,6 +5,7 @@ import importlib
 import itertools
 import logging
 import os
+import re
 import sys
 import platform
 import getpass
@@ -570,7 +571,7 @@ class Core(commands.Cog, CoreLogic):
             await ctx.send(
                 "You're about to make the `{0}invite` command public. "
                 "All users will be able to invite me on their server.\n\n"
-                "If you agree, you can type `{0}inviteset public yes`.".format(ctx.prefix)
+                "If you agree, you can type `{0}inviteset public yes`.".format(ctx.clean_prefix)
             )
         else:
             await self.bot._config.invite_public.set(True)
@@ -1201,7 +1202,7 @@ class Core(commands.Cog, CoreLogic):
                     "only do it up to 2 times an hour. Use "
                     "nicknames if you need frequent changes. "
                     "`{}set nickname`"
-                ).format(ctx.prefix)
+                ).format(ctx.clean_prefix)
             )
         else:
             await ctx.send(_("Done."))
@@ -1263,7 +1264,7 @@ class Core(commands.Cog, CoreLogic):
                 _(
                     "Invalid locale. Use `{prefix}listlocales` to get "
                     "a list of available locales."
-                ).format(prefix=ctx.prefix)
+                ).format(prefix=ctx.clean_prefix)
             )
 
     @_set.command()
