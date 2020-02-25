@@ -1,6 +1,7 @@
+import asyncio
+from abc import ABC
 from collections import defaultdict
 from typing import List, Tuple
-from abc import ABC
 
 import discord
 from redbot.core import Config, modlog, commands
@@ -77,25 +78,39 @@ class Mod(
         self.tban_expiry_task = self.bot.loop.create_task(self.check_tempban_expirations())
         self.last_case: dict = defaultdict(dict)
 
+        self._ready = asyncio.Event()
+
     async def initialize(self):
         await self._maybe_update_config()
+        self._ready.set()
+
+    async def cog_before_invoke(self, ctx: commands.Context) -> None:
+        await self._ready.wait()
 
     def cog_unload(self):
         self.tban_expiry_task.cancel()
 
     async def _maybe_update_config(self):
         """Maybe update `delete_delay` value set by Config prior to Mod 1.0.0."""
-        if await self.settings.version():
-            return
-        guild_dict = await self.settings.all_guilds()
-        for guild_id, info in guild_dict.items():
-            delete_repeats = info.get("delete_repeats", False)
-            if delete_repeats:
-                val = 3
-            else:
-                val = -1
-            await self.settings.guild(discord.Object(id=guild_id)).delete_repeats.set(val)
-        await self.settings.version.set(__version__)
+        if not await self.settings.version():
+            guild_dict = await self.settings.all_guilds()
+            for guild_id, info in guild_dict.items():
+                delete_repeats = info.get("delete_repeats", False)
+                if delete_repeats:
+                    val = 3
+                else:
+                    val = -1
+                await self.settings.guild(discord.Object(id=guild_id)).delete_repeats.set(val)
+            await self.settings.version.set("1.0.0")  # set version of last update
+        if await self.settings.version() < "1.1.0":
+            prefixes = await self.bot.get_valid_prefixes()
+            msg = _(
+                "Ignored guilds and channels have been moved. "
+                "Please use `{prefix}moveignoredchannels` if "
+                "you were previously using these functions."
+            ).format(prefix=prefixes[0])
+            self.bot.loop.create_task(self.bot.send_to_owners(msg))
+            await self.settings.version.set(__version__)
 
     # TODO: Move this to core.
     # This would be in .movetocore , but the double-under name here makes that more trouble
