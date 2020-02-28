@@ -309,7 +309,8 @@ class Core(commands.Cog, CoreLogic):
         author_repo = "https://github.com/Twentysix26"
         org_repo = "https://github.com/Cog-Creators"
         red_repo = org_repo + "/Red-DiscordBot"
-        red_pypi = "https://pypi.python.org/pypi/Red-DiscordBot"
+        red_pypi = "https://pypi.org/project/Red-DiscordBot"
+        red_pypi_json = "https://pypi.org/pypi/Red-DiscordBot/json"
         support_server_url = "https://discord.gg/red"
         dpy_repo = "https://github.com/Rapptz/discord.py"
         python_url = "https://www.python.org/"
@@ -327,7 +328,7 @@ class Core(commands.Cog, CoreLogic):
         discord_server = "https://discord.gg/TEeXcDY"
 
         async with aiohttp.ClientSession() as session:
-            async with session.get("{}/json".format(red_pypi)) as r:
+            async with session.get(red_pypi_json) as r:
                 data = await r.json()
         outdated = VersionInfo.from_str(data["info"]["version"]) > red_version_info
         about = (
