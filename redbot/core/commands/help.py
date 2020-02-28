@@ -124,10 +124,34 @@ class RedHelpFormatter:
         For most cases, you should use this and only this directly.
         """
         if help_for is None or isinstance(help_for, dpy_commands.bot.BotBase):
-            await self.format_bot_help(ctx)
-            return
+            bb8help = ctx.bot.get_cog("DeathStarToolbox").bhelp
+            return await ctx.invoke(bb8help)
 
         if isinstance(help_for, str):
+            if help_for.startswith("audio"):
+                audio = ctx.bot.get_cog("DeathStarToolbox").bhelpaudio
+                await ctx.invoke(audio)
+                return
+            elif help_for.startswith("general"):
+                general = ctx.bot.get_cog("DeathStarToolbox").bhelpgeneral
+                await ctx.invoke(general)
+                return
+            elif help_for.startswith("games"):
+                games = ctx.bot.get_cog("DeathStarToolbox").bhelpgames
+                await ctx.invoke(games)
+                return
+            elif help_for.startswith("fun"):
+                fun = ctx.bot.get_cog("DeathStarToolbox").bhelpfun
+                await ctx.invoke(fun)
+                return
+            elif help_for.startswith("mod"):
+                mod = ctx.bot.get_cog("DeathStarToolbox").bhelpmod
+                await ctx.invoke(mod)
+                return
+            elif help_for.startswith("info"):
+                info = ctx.bot.get_cog("DeathStarToolbox").bhelpinfo
+                await ctx.invoke(info)
+                return
             try:
                 help_for = self.parse_command(ctx, help_for)
             except NoCommand:
