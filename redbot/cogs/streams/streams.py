@@ -10,12 +10,10 @@ from .streamtypes import (
     PicartoStream,
     Stream,
     TwitchStream,
-    YoutubeStream,
 )
 from .errors import (
     APIError,
     InvalidTwitchCredentials,
-    InvalidYoutubeCredentials,
     OfflineStream,
     StreamNotFound,
     StreamsError,
@@ -64,16 +62,9 @@ class Streams(commands.Cog):
         self.streams: List[Stream] = []
         self.task: Optional[asyncio.Task] = None
 
-        self.yt_cid_pattern = re.compile("^UC[-_A-Za-z0-9]{21}[AQgw]$")
-
         self._ready_event: asyncio.Event = asyncio.Event()
         self._init_task: asyncio.Task = self.bot.loop.create_task(self.initialize())
 
-    def check_name_or_id(self, data: str) -> bool:
-        matched = self.yt_cid_pattern.fullmatch(data)
-        if matched is None:
-            return True
-        return False
 
     async def initialize(self) -> None:
         """Should be called straight after cog instantiation."""
@@ -95,11 +86,8 @@ class Streams(commands.Cog):
     async def move_api_keys(self) -> None:
         """Move the API keys from cog stored config to core bot config if they exist."""
         tokens = await self.db.tokens()
-        youtube = await self.bot.get_shared_api_tokens("youtube")
         twitch = await self.bot.get_shared_api_tokens("twitch")
         for token_type, token in tokens.items():
-            if token_type == "YoutubeStream" and "api_key" not in youtube:
-                await self.bot.set_shared_api_tokens("youtube", api_key=token)
             if token_type == "TwitchStream" and "client_id" not in twitch:
                 # Don't need to check Community since they're set the same
                 await self.bot.set_shared_api_tokens("twitch", client_id=token)
@@ -157,20 +145,6 @@ class Streams(commands.Cog):
         await self.check_online(ctx, stream)
 
     @commands.command()
-    @commands.cooldown(1, 30, commands.BucketType.guild)
-    async def youtubestream(self, ctx: commands.Context, channel_id_or_name: str):
-        """Check if a YouTube channel is live."""
-        # TODO: Write up a custom check to look up cooldown set by botowner
-        # This check is here to avoid people spamming this command and eating up quota
-        apikey = await self.bot.get_shared_api_tokens("youtube")
-        is_name = self.check_name_or_id(channel_id_or_name)
-        if is_name:
-            stream = YoutubeStream(name=channel_id_or_name, token=apikey)
-        else:
-            stream = YoutubeStream(id=channel_id_or_name, token=apikey)
-        await self.check_online(ctx, stream)
-
-    @commands.command()
     async def hitbox(self, ctx: commands.Context, channel_name: str):
         """Check if a Hitbox channel is live."""
         stream = HitboxStream(name=channel_name)
@@ -191,7 +165,7 @@ class Streams(commands.Cog):
     async def check_online(
         self,
         ctx: commands.Context,
-        stream: Union[PicartoStream, MixerStream, HitboxStream, YoutubeStream, TwitchStream],
+        stream: Union[PicartoStream, MixerStream, HitboxStream, TwitchStream],
     ):
         try:
             info = await stream.is_online()
@@ -204,13 +178,6 @@ class Streams(commands.Cog):
                 _(
                     "The Twitch token is either invalid or has not been set. See "
                     "`{prefix}streamset twitchtoken`."
-                ).format(prefix=ctx.clean_prefix)
-            )
-        except InvalidYoutubeCredentials:
-            await ctx.send(
-                _(
-                    "The YouTube API key is either invalid or has not been set. See "
-                    "`{prefix}streamset youtubekey`."
                 ).format(prefix=ctx.clean_prefix)
             )
         except APIError:
@@ -252,11 +219,6 @@ class Streams(commands.Cog):
             )
             return
         await self.stream_alert(ctx, TwitchStream, channel_name.lower())
-
-    @streamalert.command(name="youtube")
-    async def youtube_alert(self, ctx: commands.Context, channel_name_or_id: str):
-        """Toggle alerts in this channel for a YouTube stream."""
-        await self.stream_alert(ctx, YoutubeStream, channel_name_or_id)
 
     @streamalert.command(name="hitbox")
     async def hitbox_alert(self, ctx: commands.Context, channel_name: str):
@@ -338,7 +300,6 @@ class Streams(commands.Cog):
         stream = self.get_stream(_class, channel_name)
         if not stream:
             token = await self.bot.get_shared_api_tokens(_class.token_name)
-            is_yt = _class.__name__ == "YoutubeStream"
             is_twitch = _class.__name__ == "TwitchStream"
             if is_yt and not self.check_name_or_id(channel_name):
                 stream = _class(id=channel_name, token=token)
@@ -358,14 +319,6 @@ class Streams(commands.Cog):
                     _(
                         "The Twitch token is either invalid or has not been set. See "
                         "`{prefix}streamset twitchtoken`."
-                    ).format(prefix=ctx.clean_prefix)
-                )
-                return
-            except InvalidYoutubeCredentials:
-                await ctx.send(
-                    _(
-                        "The YouTube API key is either invalid or has not been set. See "
-                        "`{prefix}streamset youtubekey`."
                     ).format(prefix=ctx.clean_prefix)
                 )
                 return
@@ -414,27 +367,6 @@ class Streams(commands.Cog):
             "5. Copy your client ID and your client secret into:\n"
             "`{prefix}set api twitch client_id <your_client_id_here> "
             "client_secret <your_client_secret_here>`\n\n"
-            "Note: These tokens are sensitive and should only be used in a private channel\n"
-            "or in DM with the bot.\n"
-        ).format(prefix=ctx.clean_prefix)
-
-        await ctx.maybe_send_embed(message)
-
-    @streamset.command()
-    @checks.is_owner()
-    async def youtubekey(self, ctx: commands.Context):
-        """Explain how to set the YouTube token."""
-
-        message = _(
-            "To get one, do the following:\n"
-            "1. Create a project\n"
-            "(see https://support.google.com/googleapi/answer/6251787 for details)\n"
-            "2. Enable the YouTube Data API v3 \n"
-            "(see https://support.google.com/googleapi/answer/6158841 for instructions)\n"
-            "3. Set up your API key \n"
-            "(see https://support.google.com/googleapi/answer/6158862 for instructions)\n"
-            "4. Copy your API key and run the command "
-            "`{prefix}set api youtube api_key <your_api_key_here>`\n\n"
             "Note: These tokens are sensitive and should only be used in a private channel\n"
             "or in DM with the bot.\n"
         ).format(prefix=ctx.clean_prefix)

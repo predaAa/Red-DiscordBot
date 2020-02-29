@@ -12,7 +12,6 @@ from .errors import (
     APIError,
     OfflineStream,
     InvalidTwitchCredentials,
-    InvalidYoutubeCredentials,
     StreamNotFound,
 )
 from redbot.core.i18n import Translator
@@ -23,11 +22,6 @@ TWITCH_ID_ENDPOINT = TWITCH_BASE_URL + "/helix/users"
 TWITCH_STREAMS_ENDPOINT = TWITCH_BASE_URL + "/helix/streams/"
 TWITCH_COMMUNITIES_ENDPOINT = TWITCH_BASE_URL + "/helix/communities"
 
-YOUTUBE_BASE_URL = "https://www.googleapis.com/youtube/v3"
-YOUTUBE_CHANNELS_ENDPOINT = YOUTUBE_BASE_URL + "/channels"
-YOUTUBE_SEARCH_ENDPOINT = YOUTUBE_BASE_URL + "/search"
-YOUTUBE_VIDEOS_ENDPOINT = YOUTUBE_BASE_URL + "/videos"
-YOUTUBE_CHANNEL_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
 _ = Translator("Streams", __file__)
 
@@ -76,124 +70,6 @@ class Stream:
 
     def __repr__(self):
         return "<{0.__class__.__name__}: {0.name}>".format(self)
-
-
-class YoutubeStream(Stream):
-
-    token_name = "youtube"
-
-    def __init__(self, **kwargs):
-        self.id = kwargs.pop("id", None)
-        self._token = kwargs.pop("token", None)
-        self.not_livestreams: List[str] = []
-        self.livestreams: List[str] = []
-
-        super().__init__(**kwargs)
-
-    async def is_online(self):
-        if not self._token:
-            raise InvalidYoutubeCredentials("YouTube API key is not set.")
-
-        if not self.id:
-            self.id = await self.fetch_id()
-        elif not self.name:
-            self.name = await self.fetch_name()
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(YOUTUBE_CHANNEL_RSS.format(channel_id=self.id)) as r:
-                rssdata = await r.text()
-
-        if self.not_livestreams:
-            self.not_livestreams = list(dict.fromkeys(self.not_livestreams))
-
-        if self.livestreams:
-            self.livestreams = list(dict.fromkeys(self.livestreams))
-
-        for video_id in get_video_ids_from_feed(rssdata):
-            if video_id in self.not_livestreams:
-                log.debug(f"video_id in not_livestreams: {video_id}")
-                continue
-            log.debug(f"video_id not in not_livestreams: {video_id}")
-            params = {
-                "key": self._token["api_key"],
-                "id": video_id,
-                "part": "id,liveStreamingDetails",
-            }
-            async with aiohttp.ClientSession() as session:
-                async with session.get(YOUTUBE_VIDEOS_ENDPOINT, params=params) as r:
-                    data = await r.json()
-                    stream_data = data.get("items", [{}])[0].get("liveStreamingDetails", {})
-                    log.debug(f"stream_data for {video_id}: {stream_data}")
-                    if (
-                        stream_data
-                        and stream_data != "None"
-                        and stream_data.get("actualEndTime", None) is None
-                        and stream_data.get("concurrentViewers", None) is not None
-                    ):
-                        if video_id not in self.livestreams:
-                            self.livestreams.append(data["items"][0]["id"])
-                    else:
-                        self.not_livestreams.append(data["items"][0]["id"])
-                        if video_id in self.livestreams:
-                            self.livestreams.remove(video_id)
-        log.debug(f"livestreams for {self.name}: {self.livestreams}")
-        log.debug(f"not_livestreams for {self.name}: {self.not_livestreams}")
-        # This is technically redundant since we have the
-        # info from the RSS ... but incase you dont wanna deal with fully rewritting the
-        # code for this part, as this is only a 2 quota query.
-        if self.livestreams:
-            params = {"key": self._token["api_key"], "id": self.livestreams[-1], "part": "snippet"}
-            async with aiohttp.ClientSession() as session:
-                async with session.get(YOUTUBE_VIDEOS_ENDPOINT, params=params) as r:
-                    data = await r.json()
-            return self.make_embed(data)
-        raise OfflineStream()
-
-    def make_embed(self, data):
-        vid_data = data["items"][0]
-        video_url = "https://youtube.com/watch?v={}".format(vid_data["id"])
-        title = vid_data["snippet"]["title"]
-        thumbnail = vid_data["snippet"]["thumbnails"]["default"]["url"]
-        channel_title = vid_data["snippet"]["channelTitle"]
-        embed = discord.Embed(title=title, url=video_url)
-        embed.set_author(name=channel_title)
-        embed.set_image(url=rnd(thumbnail))
-        embed.colour = 0x9255A5
-        return embed
-
-    async def fetch_id(self):
-        return await self._fetch_channel_resource("id")
-
-    async def fetch_name(self):
-        snippet = await self._fetch_channel_resource("snippet")
-        return snippet["title"]
-
-    async def _fetch_channel_resource(self, resource: str):
-
-        params = {"key": self._token["api_key"], "part": resource}
-        if resource == "id":
-            params["forUsername"] = self.name
-        else:
-            params["id"] = self.id
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(YOUTUBE_CHANNELS_ENDPOINT, params=params) as r:
-                data = await r.json()
-
-        if (
-            "error" in data
-            and data["error"]["code"] == 400
-            and data["error"]["errors"][0]["reason"] == "keyInvalid"
-        ):
-            raise InvalidYoutubeCredentials()
-        elif "items" in data and len(data["items"]) == 0:
-            raise StreamNotFound()
-        elif "items" in data:
-            return data["items"][0][resource]
-        raise APIError()
-
-    def __repr__(self):
-        return "<{0.__class__.__name__}: {0.name} (ID: {0.id})>".format(self)
 
 
 class TwitchStream(Stream):

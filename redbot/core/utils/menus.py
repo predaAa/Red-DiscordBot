@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import functools
 import warnings
-from typing import Union, Iterable, List, Optional, Union
+from typing import Union, Iterable, List, Optional, Union, Mapping
 import discord
 
 from .. import commands
