@@ -157,10 +157,18 @@ async def menu(
         )
     except asyncio.TimeoutError:
         try:
-            await message.clear_reactions()
-        except discord.Forbidden:  # cannot remove all reactions
-            for key in new_controls.keys():
-                await message.remove_reaction(key, ctx.me)
+            if message.channel.permissions_for(ctx.me).manage_messages:
+                await message.clear_reactions()
+            else:
+                raise RuntimeError
+        except (discord.Forbidden, RuntimeError):  # cannot remove all reactions
+            for key in controls.keys():
+                try:
+                    await message.remove_reaction(key, ctx.bot.user)
+                except discord.Forbidden:
+                    return
+                except discord.HTTPException:
+                    pass
         except discord.NotFound:
             return
     else:
