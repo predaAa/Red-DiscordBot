@@ -139,11 +139,7 @@ async def menu(
             message = await ctx.send(current_page)
         # Don't wait for reactions to be added (GH-1797)
         # noinspection PyAsyncCall
-<<<<<<< HEAD
-        start_adding_reactions(message, new_controls.keys(), ctx.bot.loop)
-=======
-        start_adding_reactions(message, controls.keys())
->>>>>>> eebea59... Remove usage of `loop` arg in calls to `start_adding_reactions` (#3644)
+        start_adding_reactions(message, new_controls.keys())
     else:
         try:
             if isinstance(current_page, discord.Embed):
