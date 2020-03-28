@@ -71,65 +71,84 @@ class ModInfo(MixinMeta):
                 await ctx.send(_("Done."))
 
     def handle_custom(self, user):
-        print(user.activities)
-        a = [c for c in user.activities if c.type == ActivityType.custom]
+        a = [c for c in user.activities if c.type == discord.ActivityType.custom]
         if not a:
-            return None, ActivityType.custom
+            return None, discord.ActivityType.custom
         a = a[0]
         c_status = None
-        if not a.name:
-            c_status = self.bot.get_emoji(a.emoji.id)
-        if c_status:
-            pass
-        if a.name and a.emoji:
-            c_status = f"{a.emoji} {a.name}"
-        elif a.emoji and not c_status:
-            c_status = f"{a.emoji}"
+        if not a.name and not a.emoji:
+            return None, discord.ActivityType.custom
+        elif a.name and a.emoji:
+            c_status = _("Custom: {emoji} {name}").format(emoji=a.emoji, name=a.name)
+        elif a.emoji:
+            c_status = _("Custom: {emoji}").format(emoji=a.emoji)
         elif a.name:
-            c_status = a.name
-        else:
-            c_status = None
-        return c_status, ActivityType.custom
+            c_status = _("Custom: {name}").format(name=a.name)
+        return c_status, discord.ActivityType.custom
 
     def handle_playing(self, user):
-        p_acts = [c for c in user.activities if c.type == ActivityType.playing]
-        p_act = p_acts[0] if p_acts else None
-        act = p_act.name if p_act and p_act.name else None
-        return act, ActivityType.playing
+        p_acts = [c for c in user.activities if c.type == discord.ActivityType.playing]
+        if not p_acts:
+            return None, discord.ActivityType.playing
+        p_act = p_acts[0]
+        act = _("Playing: {name}").format(name=p_act.name)
+        return act, discord.ActivityType.playing
+
     def handle_streaming(self, user):
-        s_acts = [c for c in user.activities if c.type == ActivityType.streaming]
-        s_act = s_acts[0] if s_acts else None
-        act = f"[{s_act.name}{' | ' if s_act.game else ''}{s_act.game or ''}]({s_act.url})" if s_act and s_act.name and hasattr(s_act, "game") else s_act.name if s_act and s_act.name else None
-        return act, ActivityType.streaming
+        s_acts = [c for c in user.activities if c.type == discord.ActivityType.streaming]
+        if not s_acts:
+            return None, discord.ActivityType.streaming
+        s_act = s_acts[0]
+        if isinstance(s_act, discord.Streaming):
+            act = _("Streaming: [{name}{sep}{game}]({url})").format(
+                name=discord.utils.escape_markdown(s_act.name),
+                sep=" | " if s_act.game else "",
+                game=discord.utils.escape_markdown(s_act.game) if s_act.game else "",
+                url=s_act.url,
+            )
+        else:
+            act = _("Streaming: {name}").format(name=s_act.name)
+        return act, discord.ActivityType.streaming
+
     def handle_listening(self, user):
-        l_acts = [c for c in user.activities if c.type == ActivityType.listening]
-        l_act = l_acts[0] if l_acts else None
-        act = f"[{l_act.title}{' | ' if l_act.artists[0] else ''}{l_act.artists[0] or ''}](https://open.spotify.com/track/{l_act.track_id})" if l_act and hasattr(l_act, "title") else l_act.name if l_act and l_act.name else None
-        return act, ActivityType.listening
+        l_acts = [c for c in user.activities if c.type == discord.ActivityType.listening]
+        if not l_acts:
+            return None, discord.ActivityType.listening
+        l_act = l_acts[0]
+        if isinstance(l_act, discord.Spotify):
+            act = _("Listening: [{title}{sep}{artist}]({url})").format(
+                title=discord.utils.escape_markdown(l_act.title),
+                sep=" | " if l_act.artist else "",
+                artist=discord.utils.escape_markdown(l_act.artist) if l_act.artist else "",
+                url=f"https://open.spotify.com/track/{l_act.track_id}",
+            )
+        else:
+            act = _("Listening: {title}").format(title=l_act.name)
+        return act, discord.ActivityType.listening
+
     def handle_watching(self, user):
-        w_acts = [c for c in user.activities if c.type == ActivityType.watching]
-        w_act = w_acts[0] if w_acts else None
-        act = w_act.name if w_act else None
-        return act, ActivityType.watching
+        w_acts = [c for c in user.activities if c.type == discord.ActivityType.watching]
+        if not w_acts:
+            return None, discord.ActivityType.watching
+        w_act = w_acts[0]
+        act = _("Watching: {name}").format(name=w_act.name)
+        return act, discord.ActivityType.watching
 
     def get_status_string(self, user):
         string = ""
-        for a in [self.handle_custom(user), self.handle_playing(user), self.handle_listening(user), self.handle_streaming(user), self.handle_watching(user)]:
-            status_string, status_type= a
+        for a in [
+            self.handle_custom(user),
+            self.handle_playing(user),
+            self.handle_listening(user),
+            self.handle_streaming(user),
+            self.handle_watching(user),
+        ]:
+            status_string, status_type = a
             if status_string is None:
                 continue
-            if status_type == discord.ActivityType.custom:
-                string += f"Custom: {status_string}\n"
-            elif status_type == discord.ActivityType.playing:
-                string += f"Playing: {status_string}\n"
-            elif status_type == discord.ActivityType.streaming:
-                string += f"Streaming: {status_string}\n"
-            elif status_type == discord.ActivityType.listening:
-                string += f"Listening: {status_string}\n"
-            elif status_type == discord.ActivityType.watching:
-                string += f"Watching: {status_string}\n"
+            string += f"{status_string}\n"
         return string
-    
+
     @commands.command()
     @commands.guild_only()
     @commands.bot_has_permissions(embed_links=True)
@@ -171,20 +190,16 @@ class ModInfo(MixinMeta):
         created_on = _("{}\n({} days ago)").format(user_created, since_created)
         joined_on = _("{}\n({} days ago)").format(user_joined, since_joined)
 
-        if user.status.name == "online":
-            if user.is_on_mobile() is True:
-                statusemoji = "https://cdn.discordapp.com/emojis/554418132953989140.png?v=1"
-            else:
-                statusemoji = "https://cdn.discordapp.com/emojis/642458713738838017.png?v=1"
+        if any(a.type is discord.ActivityType.streaming for a in user.activities):
+            statusemoji = "\N{LARGE PURPLE CIRCLE}"
+        elif user.status.name == "online":
+            statusemoji = "\N{LARGE GREEN CIRCLE}"
         elif user.status.name == "offline":
-            statusemoji = "https://cdn.discordapp.com/emojis/642458714074513427.png?v=1"
+            statusemoji = "\N{MEDIUM WHITE CIRCLE}"
         elif user.status.name == "dnd":
-            statusemoji = "https://cdn.discordapp.com/emojis/642458714145816602.png?v=1"
-        elif user.status.name == "streaming":
-            statusemoji = "https://cdn.discordapp.com/emojis/642458713692569602.png?v=1"
+            statusemoji = "\N{LARGE RED CIRCLE}"
         elif user.status.name == "idle":
-            statusemoji = "https://cdn.discordapp.com/emojis/642458714003210240.png?v=1"
-
+            statusemoji = "\N{LARGE ORANGE CIRCLE}"
         activity = _("Chilling in {} status").format(user.status)
         status_string = self.get_status_string(user)
 
@@ -224,7 +239,7 @@ class ModInfo(MixinMeta):
             role_str = None
 
         data = discord.Embed(description=status_string or activity, colour=user.colour)
-            
+
         data.add_field(name=_("Joined Discord on"), value=created_on)
         data.add_field(name=_("Joined this server on"), value=joined_on)
         if role_str is not None:
@@ -251,10 +266,12 @@ class ModInfo(MixinMeta):
 
         if user.avatar:
             avatar = user.avatar_url_as(static_format="png")
-            data.set_author(name=name, url=avatar, icon_url=statusemoji)
+            data.set_author(
+                name="{statusemoji} {name}".format(statusemoji=statusemoji, name=name), url=avatar
+            )
             data.set_thumbnail(url=avatar)
         else:
-            data.set_author(name=name)
+            data.set_author(name="{statusemoji} {name}".format(statusemoji=statusemoji, name=name))
 
         await ctx.send(embed=data)
 
