@@ -196,8 +196,7 @@ class Economy(commands.Cog):
             )
         )
 
-    @is_owner_if_bank_global()
-    @checks.admin_or_permissions(manage_guild=True)
+    @checks.is_owner()
     @_bank.command(name="set")
     async def _set(self, ctx: commands.Context, to: discord.Member, creds: SetParser):
         """Set the balance of user's bank account.
@@ -242,8 +241,7 @@ class Economy(commands.Cog):
         else:
             await ctx.send(msg)
 
-    @is_owner_if_bank_global()
-    @checks.guildowner_or_permissions(administrator=True)
+    @checks.is_owner()
     @_bank.command()
     async def reset(self, ctx, confirmation: bool = False):
         """Delete all bank accounts."""
@@ -274,8 +272,7 @@ class Economy(commands.Cog):
         await self.config.embed_tagline.set(embedtagline)
         await ctx.send("Embed tagline set")
 
-    @is_owner_if_bank_global()
-    @checks.admin_or_permissions(manage_guild=True)
+    @checks.is_owner()
     @_bank.group(name="prune")
     async def _prune(self, ctx):
         """Prune bank accounts."""
@@ -283,7 +280,7 @@ class Economy(commands.Cog):
 
     @_prune.command(name="local")
     @commands.guild_only()
-    @checks.guildowner()
+    @checks.is_owner()
     async def _local(self, ctx, confirmation: bool = False):
         """Prune bank accounts for users no longer in the server."""
         global_bank = await bank.is_global()
@@ -330,6 +327,7 @@ class Economy(commands.Cog):
             )
 
     @_prune.command(usage="<user> [confirmation=False]")
+    @checks.is_owner()
     async def user(
         self, ctx, member_or_id: Union[discord.Member, RawUserIds], confirmation: bool = False
     ):
@@ -357,6 +355,7 @@ class Economy(commands.Cog):
             await ctx.send(_("The bank account for {name} has been pruned.").format(name=name))
 
     @guild_only_check()
+    @commands.bot_has_permissions(embed_links=True)
     @commands.command()
     async def payday(self, ctx: commands.Context):
         """Get some free currency."""
@@ -511,6 +510,7 @@ class Economy(commands.Cog):
                 await ctx.send(embed=embed)
 
     @commands.command()
+    @commands.bot_has_permissions(embed_links=True)
     async def daily(self, ctx):
         """
         Check if you have voted on Top.gg in the last 12 hours and claim your reward
@@ -645,6 +645,7 @@ class Economy(commands.Cog):
                 await ctx.send(embed=embed)
 
     @commands.command()
+    @commands.bot_has_permissions(embed_links=True)
     @guild_only_check()
     async def leaderboard(self, ctx: commands.Context):
         """Print the global leaderboard.
@@ -744,6 +745,7 @@ class Economy(commands.Cog):
         await ctx.author.send(SLOT_PAYOUTS_MSG)
 
     @commands.command()
+    @commands.bot_has_permissions(embed_links=True)
     @guild_only_check()
     async def slot(self, ctx: commands.Context, bid: int):
         """Use the slot machine."""
@@ -873,8 +875,7 @@ class Economy(commands.Cog):
         await channel.send(embed=embed)
 
     @guild_only_check()
-    @is_owner_if_bank_global()
-    @checks.admin_or_permissions(manage_guild=True)
+    @checks.is_owner()
     @commands.group()
     async def economyset(self, ctx: commands.Context):
         """Manage Economy settings."""
