@@ -124,8 +124,6 @@ class RedBase(
             prefix=[],
             whitelist=[],
             blacklist=[],
-            admin_role=[],
-            mod_role=[],
             embeds=None,
             ignored=False,
             use_bot_color=False,
