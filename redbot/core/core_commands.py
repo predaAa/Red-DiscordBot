@@ -899,30 +899,13 @@ class Core(commands.Cog, CoreLogic):
     async def _set(self, ctx: commands.Context):
         """Changes [botname]'s settings"""
         if ctx.invoked_subcommand is None:
-            if ctx.guild:
-                guild = ctx.guild
-                admin_role_ids = await ctx.bot._config.guild(ctx.guild).admin_role()
-                admin_role_names = [r.name for r in guild.roles if r.id in admin_role_ids]
-                admin_roles_str = (
-                    humanize_list(admin_role_names) if admin_role_names else "Not Set."
-                )
-                mod_role_ids = await ctx.bot._config.guild(ctx.guild).mod_role()
-                mod_role_names = [r.name for r in guild.roles if r.id in mod_role_ids]
-                mod_roles_str = humanize_list(mod_role_names) if mod_role_names else "Not Set."
-                guild_settings = _("Admin roles: {admin}\nMod roles: {mod}\n").format(
-                    admin=admin_roles_str, mod=mod_roles_str
-                )
-            else:
-                guild_settings = ""
-
             prefixes = await ctx.bot._prefix_cache.get_prefixes(ctx.guild)
             locale = await ctx.bot._config.locale()
 
             prefix_string = " ".join(prefixes)
             settings = (
                 f"{ctx.bot.user.name} Settings:\n\n"
-                f"Prefixes: {prefix_string}\n"
-                f"{guild_settings}"
+                f"Prefixes: {prefix_string}"
             )
             for page in pagify(settings):
                 await ctx.send(box(page))
@@ -983,58 +966,6 @@ class Core(commands.Cog, CoreLogic):
             await ctx.bot._config.description.set(description)
             ctx.bot.description = description
             await ctx.tick()
-
-    @_set.command()
-    @checks.guildowner()
-    @commands.guild_only()
-    async def addadminrole(self, ctx: commands.Context, *, role: discord.Role):
-        """
-        Adds an admin role for this guild.
-        """
-        async with ctx.bot._config.guild(ctx.guild).admin_role() as roles:
-            if role.id in roles:
-                return await ctx.send(_("This role is already an admin role."))
-            roles.append(role.id)
-        await ctx.send(_("That role is now considered an admin role."))
-
-    @_set.command()
-    @checks.guildowner()
-    @commands.guild_only()
-    async def addmodrole(self, ctx: commands.Context, *, role: discord.Role):
-        """
-        Adds a mod role for this guild.
-        """
-        async with ctx.bot._config.guild(ctx.guild).mod_role() as roles:
-            if role.id in roles:
-                return await ctx.send(_("This role is already a mod role."))
-            roles.append(role.id)
-        await ctx.send(_("That role is now considered a mod role."))
-
-    @_set.command(aliases=["remadmindrole", "deladminrole", "deleteadminrole"])
-    @checks.guildowner()
-    @commands.guild_only()
-    async def removeadminrole(self, ctx: commands.Context, *, role: discord.Role):
-        """
-        Removes an admin role for this guild.
-        """
-        async with ctx.bot._config.guild(ctx.guild).admin_role() as roles:
-            if role.id not in roles:
-                return await ctx.send(_("That role was not an admin role to begin with."))
-            roles.remove(role.id)
-        await ctx.send(_("That role is no longer considered an admin role."))
-
-    @_set.command(aliases=["remmodrole", "delmodrole", "deletemodrole"])
-    @checks.guildowner()
-    @commands.guild_only()
-    async def removemodrole(self, ctx: commands.Context, *, role: discord.Role):
-        """
-        Removes a mod role for this guild.
-        """
-        async with ctx.bot._config.guild(ctx.guild).mod_role() as roles:
-            if role.id not in roles:
-                return await ctx.send(_("That role was not a mod role to begin with."))
-            roles.remove(role.id)
-        await ctx.send(_("That role is no longer considered a mod role."))
 
     @_set.command(aliases=["usebotcolor"])
     @checks.guildowner()

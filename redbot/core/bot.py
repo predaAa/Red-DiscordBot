@@ -724,10 +724,12 @@ class RedBase(
     async def is_admin(self, member: discord.Member) -> bool:
         """Checks if a member is an admin of their guild."""
         try:
-            member_snowflakes = member._roles  # DEP-WARN
-            for snowflake in await self._config.guild(member.guild).admin_role():
-                if member_snowflakes.has(snowflake):  # Dep-WARN
-                    return True
+            if [
+                value
+                for perm, value in member.guild_permissions
+                if value and perm == "administrator"
+            ]:
+                return True
         except AttributeError:  # someone passed a webhook to this
             pass
         return False
@@ -735,50 +737,21 @@ class RedBase(
     async def is_mod(self, member: discord.Member) -> bool:
         """Checks if a member is a mod or admin of their guild."""
         try:
-            member_snowflakes = member._roles  # DEP-WARN
-            for snowflake in await self._config.guild(member.guild).admin_role():
-                if member_snowflakes.has(snowflake):  # DEP-WARN
-                    return True
-            for snowflake in await self._config.guild(member.guild).mod_role():
-                if member_snowflakes.has(snowflake):  # DEP-WARN
-                    return True
+            if [
+                value
+                for perm, value in member.guild_permissions
+                if value and perm == "administrator"
+            ]:
+                return True
+            elif [
+                value
+                for perm, value in member.guild_permissions
+                if value and perm == "kick_members"
+            ]:
+                return True
         except AttributeError:  # someone passed a webhook to this
             pass
         return False
-
-    async def get_admin_roles(self, guild: discord.Guild) -> List[discord.Role]:
-        """
-        Gets the admin roles for a guild.
-        """
-        ret: List[discord.Role] = []
-        for snowflake in await self._config.guild(guild).admin_role():
-            r = guild.get_role(snowflake)
-            if r:
-                ret.append(r)
-        return ret
-
-    async def get_mod_roles(self, guild: discord.Guild) -> List[discord.Role]:
-        """
-        Gets the mod roles for a guild.
-        """
-        ret: List[discord.Role] = []
-        for snowflake in await self._config.guild(guild).mod_role():
-            r = guild.get_role(snowflake)
-            if r:
-                ret.append(r)
-        return ret
-
-    async def get_admin_role_ids(self, guild_id: int) -> List[int]:
-        """
-        Gets the admin role ids for a guild id.
-        """
-        return await self._config.guild(discord.Object(id=guild_id)).admin_role()
-
-    async def get_mod_role_ids(self, guild_id: int) -> List[int]:
-        """
-        Gets the mod role ids for a guild id.
-        """
-        return await self._config.guild(discord.Object(id=guild_id)).mod_role()
 
     async def get_shared_api_tokens(self, service_name: str) -> Dict[str, str]:
         """

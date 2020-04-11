@@ -109,10 +109,10 @@ class PrivilegeLevel(enum.IntEnum):
     """No special privilege level."""
 
     MOD = enum.auto()
-    """User has the mod role."""
+    """User has mod permissions."""
 
     ADMIN = enum.auto()
-    """User has the admin role."""
+    """User has admin permission."""
 
     GUILD_OWNER = enum.auto()
     """User is the guild level."""
@@ -129,18 +129,18 @@ class PrivilegeLevel(enum.IntEnum):
             return cls.NONE
         elif ctx.author == ctx.guild.owner:
             return cls.GUILD_OWNER
-
-        # The following is simply an optimised way to check if the user has the
-        # admin or mod role.
-        guild_settings = ctx.bot._config.guild(ctx.guild)
-
-        member_snowflakes = ctx.author._roles  # DEP-WARN
-        for snowflake in await guild_settings.admin_role():
-            if member_snowflakes.has(snowflake):  # DEP-WARN
-                return cls.ADMIN
-        for snowflake in await guild_settings.mod_role():
-            if member_snowflakes.has(snowflake):  # DEP-WARN
-                return cls.MOD
+        elif [
+            value
+            for perm, value in ctx.author.guild_permissions
+            if value and perm == "administrator"
+        ]:
+            return cls.ADMIN
+        elif [
+            value
+            for perm, value in ctx.author.guild_permissions
+            if value and perm == "kick_members"
+        ]:
+            return cls.MOD
 
         return cls.NONE
 
@@ -721,7 +721,7 @@ def guildowner():
 
 
 def admin_or_permissions(**perms: bool):
-    """Restrict the command to users with the admin role or these permissions.
+    """Restrict the command to users with administrator permission or these permissions.
 
     This check can be overridden by rules.
     """
@@ -729,7 +729,7 @@ def admin_or_permissions(**perms: bool):
 
 
 def admin():
-    """Restrict the command to users with the admin role.
+    """Restrict the command to users with administrator permission.
 
     This check can be overridden by rules.
     """
@@ -737,7 +737,7 @@ def admin():
 
 
 def mod_or_permissions(**perms: bool):
-    """Restrict the command to users with the mod role or these permissions.
+    """Restrict the command to users with kick_members permission or these permissions.
 
     This check can be overridden by rules.
     """
@@ -745,7 +745,7 @@ def mod_or_permissions(**perms: bool):
 
 
 def mod():
-    """Restrict the command to users with the mod role.
+    """Restrict the command to users with kick_members permission.
 
     This check can be overridden by rules.
     """

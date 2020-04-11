@@ -98,9 +98,7 @@ async def is_allowed_by_hierarchy(
     return mod.top_role.position > user.top_role.position or is_special
 
 
-async def is_mod_or_superior(
-    bot: "Red", obj: Union[discord.Message, discord.Member, discord.Role]
-):
+async def is_mod_or_superior(bot: "Red", obj: Union[discord.Message, discord.Member]):
     """Check if an object has mod or superior permissions.
 
     If a message is passed, its author's permissions are checked. If a role is
@@ -110,7 +108,7 @@ async def is_mod_or_superior(
     ----------
     bot : redbot.core.bot.Red
         The bot object.
-    obj : `discord.Message` or `discord.Member` or `discord.Role`
+    obj : `discord.Message` or `discord.Member`
         The object to check permissions for.
 
     Returns
@@ -128,15 +126,8 @@ async def is_mod_or_superior(
         user = obj.author
     elif isinstance(obj, discord.Member):
         user = obj
-    elif isinstance(obj, discord.Role):
-        gid = obj.guild.id
-        if obj in await bot.get_admin_role_ids(gid):
-            return True
-        if obj in await bot.get_mod_role_ids(gid):
-            return True
-        return False
     else:
-        raise TypeError("Only messages, members or roles may be passed")
+        raise TypeError("Only messages or members may be passed")
 
     if await bot.is_owner(user):
         return True
@@ -180,9 +171,7 @@ def strfdelta(delta: timedelta):
     return " ".join(s)
 
 
-async def is_admin_or_superior(
-    bot: "Red", obj: Union[discord.Message, discord.Member, discord.Role]
-):
+async def is_admin_or_superior(bot: "Red", obj: Union[discord.Message, discord.Member]):
     """Same as `is_mod_or_superior` except for admin permissions.
 
     If a message is passed, its author's permissions are checked. If a role is
@@ -192,7 +181,7 @@ async def is_admin_or_superior(
     ----------
     bot : redbot.core.bot.Red
         The bot object.
-    obj : `discord.Message` or `discord.Member` or `discord.Role`
+    obj : `discord.Message` or `discord.Member`
         The object to check permissions for.
 
     Returns
@@ -210,10 +199,8 @@ async def is_admin_or_superior(
         user = obj.author
     elif isinstance(obj, discord.Member):
         user = obj
-    elif isinstance(obj, discord.Role):
-        return obj.id in await bot.get_admin_role_ids(obj.guild.id)
     else:
-        raise TypeError("Only messages, members or roles may be passed")
+        raise TypeError("Only messages or members may be passed")
 
     if await bot.is_owner(user):
         return True
