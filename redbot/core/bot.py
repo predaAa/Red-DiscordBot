@@ -1070,11 +1070,6 @@ class RedBase(
         if ctx is None or ctx.valid is False:
             self.dispatch("message_without_command", message)
 
-    @staticmethod
-    def list_packages():
-        """Lists packages present in the cogs the folder"""
-        return os.listdir("cogs")
-
     async def save_packages_status(self, packages):
         await self._config.packages.set(packages)
 
