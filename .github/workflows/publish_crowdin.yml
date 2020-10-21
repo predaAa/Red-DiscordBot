@@ -2,6 +2,7 @@ name: Publish to Crowdin
 on:
   schedule:
     - cron: '0 12 * * THU'
+  workflow_dispatch:
   repository_dispatch:
     types: crowdin
 
@@ -11,6 +12,7 @@ env:
 
 jobs:
   deploy:
+    if: github.repository == 'Cog-Creators/Red-DiscordBot'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -43,6 +45,5 @@ jobs:
         body: |
           This is an automated PR.
           Please ensure that there are no errors or invalid files are in the PR.
-        labels: "Automated PR, Category: i18n"
+        labels: "Automated PR, Category: i18n, Changelog Entry: Skipped"
         branch: "automated/i18n"
-

@@ -1,11 +1,14 @@
 import asyncio
+from datetime import timezone
 from typing import cast, Optional
 
 import discord
 from redbot.core import commands, checks, i18n, modlog
+from redbot.core.utils import AsyncIter
 from redbot.core.utils.chat_formatting import format_perms_list
-from redbot.core.utils.mod import get_audit_reason, is_allowed_by_hierarchy
+from redbot.core.utils.mod import get_audit_reason
 from .abc import MixinMeta
+from .utils import is_allowed_by_hierarchy
 
 T_ = i18n.Translator("Mod", __file__)
 
@@ -22,6 +25,8 @@ mute_unmute_issues = {
         "permission and the user I'm muting must be "
         "lower than myself in the role hierarchy."
     ),
+    "left_guild": _("The user has left the server while applying an overwrite."),
+    "unknown_channel": _("The channel I tried to mute the user in isn't found."),
 }
 _ = T_
 
@@ -101,20 +106,17 @@ class MuteMixin(MixinMeta):
 
         guild = ctx.guild
         author = ctx.author
-        try:
-            await modlog.create_case(
-                self.bot,
-                guild,
-                ctx.message.created_at,
-                "voiceunban",
-                user,
-                author,
-                reason,
-                until=None,
-                channel=None,
-            )
-        except RuntimeError as e:
-            await ctx.send(e)
+        await modlog.create_case(
+            self.bot,
+            guild,
+            ctx.message.created_at.replace(tzinfo=timezone.utc),
+            "voiceunban",
+            user,
+            author,
+            reason,
+            until=None,
+            channel=None,
+        )
         await ctx.send(_("User is now allowed to speak and listen in voice channels"))
 
     @commands.command()
@@ -145,20 +147,17 @@ class MuteMixin(MixinMeta):
             await ctx.send(_("That user is already muted and deafened server-wide!"))
             return
 
-        try:
-            await modlog.create_case(
-                self.bot,
-                guild,
-                ctx.message.created_at,
-                "voiceban",
-                user,
-                author,
-                reason,
-                until=None,
-                channel=None,
-            )
-        except RuntimeError as e:
-            await ctx.send(e)
+        await modlog.create_case(
+            self.bot,
+            guild,
+            ctx.message.created_at.replace(tzinfo=timezone.utc),
+            "voiceban",
+            user,
+            author,
+            reason,
+            until=None,
+            channel=None,
+        )
         await ctx.send(_("User has been banned from speaking or listening in voice channels"))
 
     @commands.group()
@@ -188,23 +187,31 @@ class MuteMixin(MixinMeta):
         success, issue = await self.mute_user(guild, channel, author, user, audit_reason)
 
         if success:
-            try:
-                await modlog.create_case(
-                    self.bot,
-                    guild,
-                    ctx.message.created_at,
-                    "vmute",
-                    user,
-                    author,
-                    reason,
-                    until=None,
-                    channel=channel,
-                )
-            except RuntimeError as e:
-                await ctx.send(e)
+            await modlog.create_case(
+                self.bot,
+                guild,
+                ctx.message.created_at.replace(tzinfo=timezone.utc),
+                "vmute",
+                user,
+                author,
+                reason,
+                until=None,
+                channel=channel,
+            )
             await ctx.send(
                 _("Muted {user} in channel {channel.name}").format(user=user, channel=channel)
             )
+            try:
+                if channel.permissions_for(ctx.me).move_members:
+                    await user.move_to(channel)
+                else:
+                    raise RuntimeError
+            except (discord.Forbidden, RuntimeError):
+                await ctx.send(
+                    _(
+                        "Because I don't have the Move Members permission, this will take into effect when the user rejoins."
+                    )
+                )
         else:
             await ctx.send(issue)
 
@@ -224,20 +231,17 @@ class MuteMixin(MixinMeta):
         success, issue = await self.mute_user(guild, channel, author, user, audit_reason)
 
         if success:
-            try:
-                await modlog.create_case(
-                    self.bot,
-                    guild,
-                    ctx.message.created_at,
-                    "cmute",
-                    user,
-                    author,
-                    reason,
-                    until=None,
-                    channel=channel,
-                )
-            except RuntimeError as e:
-                await ctx.send(e)
+            await modlog.create_case(
+                self.bot,
+                guild,
+                ctx.message.created_at.replace(tzinfo=timezone.utc),
+                "cmute",
+                user,
+                author,
+                reason,
+                until=None,
+                channel=channel,
+            )
             await channel.send(_("User has been muted in this channel."))
         else:
             await channel.send(issue)
@@ -247,21 +251,20 @@ class MuteMixin(MixinMeta):
     @commands.bot_has_permissions(manage_roles=True)
     @checks.mod_or_permissions(administrator=True)
     async def guild_mute(self, ctx: commands.Context, user: discord.Member, *, reason: str = None):
-        """Mutes user in the server"""
+        """Mutes user in the server."""
         author = ctx.message.author
         guild = ctx.guild
         audit_reason = get_audit_reason(author, reason)
 
         mute_success = []
-        for channel in guild.channels:
-            success, issue = await self.mute_user(guild, channel, author, user, audit_reason)
-            mute_success.append((success, issue))
-            await asyncio.sleep(0.1)
-        try:
+        async with ctx.typing():
+            for channel in guild.channels:
+                success, issue = await self.mute_user(guild, channel, author, user, audit_reason)
+                mute_success.append((success, issue))
             await modlog.create_case(
                 self.bot,
                 guild,
-                ctx.message.created_at,
+                ctx.message.created_at.replace(tzinfo=timezone.utc),
                 "smute",
                 user,
                 author,
@@ -269,9 +272,7 @@ class MuteMixin(MixinMeta):
                 until=None,
                 channel=None,
             )
-        except RuntimeError as e:
-            await ctx.send(e)
-        await ctx.send(_("User has been muted in this server."))
+            await ctx.send(_("User has been muted in this server."))
 
     @commands.group()
     @commands.guild_only()
@@ -303,23 +304,31 @@ class MuteMixin(MixinMeta):
         success, message = await self.unmute_user(guild, channel, author, user, audit_reason)
 
         if success:
-            try:
-                await modlog.create_case(
-                    self.bot,
-                    guild,
-                    ctx.message.created_at,
-                    "vunmute",
-                    user,
-                    author,
-                    reason,
-                    until=None,
-                    channel=channel,
-                )
-            except RuntimeError as e:
-                await ctx.send(e)
+            await modlog.create_case(
+                self.bot,
+                guild,
+                ctx.message.created_at.replace(tzinfo=timezone.utc),
+                "vunmute",
+                user,
+                author,
+                reason,
+                until=None,
+                channel=channel,
+            )
             await ctx.send(
                 _("Unmuted {user} in channel {channel.name}").format(user=user, channel=channel)
             )
+            try:
+                if channel.permissions_for(ctx.me).move_members:
+                    await user.move_to(channel)
+                else:
+                    raise RuntimeError
+            except (discord.Forbidden, RuntimeError):
+                await ctx.send(
+                    _(
+                        "Because I don't have the Move Members permission, this will take into effect when the user rejoins."
+                    )
+                )
         else:
             await ctx.send(_("Unmute failed. Reason: {}").format(message))
 
@@ -339,20 +348,17 @@ class MuteMixin(MixinMeta):
         success, message = await self.unmute_user(guild, channel, author, user, audit_reason)
 
         if success:
-            try:
-                await modlog.create_case(
-                    self.bot,
-                    guild,
-                    ctx.message.created_at,
-                    "cunmute",
-                    user,
-                    author,
-                    reason,
-                    until=None,
-                    channel=channel,
-                )
-            except RuntimeError as e:
-                await ctx.send(e)
+            await modlog.create_case(
+                self.bot,
+                guild,
+                ctx.message.created_at.replace(tzinfo=timezone.utc),
+                "cunmute",
+                user,
+                author,
+                reason,
+                until=None,
+                channel=channel,
+            )
             await ctx.send(_("User unmuted in this channel."))
         else:
             await ctx.send(_("Unmute failed. Reason: {}").format(message))
@@ -370,24 +376,23 @@ class MuteMixin(MixinMeta):
         audit_reason = get_audit_reason(author, reason)
 
         unmute_success = []
-        for channel in guild.channels:
-            success, message = await self.unmute_user(guild, channel, author, user, audit_reason)
-            unmute_success.append((success, message))
-            await asyncio.sleep(0.1)
-        try:
+        async with ctx.typing():
+            for channel in guild.channels:
+                success, message = await self.unmute_user(
+                    guild, channel, author, user, audit_reason
+                )
+                unmute_success.append((success, message))
             await modlog.create_case(
                 self.bot,
                 guild,
-                ctx.message.created_at,
+                ctx.message.created_at.replace(tzinfo=timezone.utc),
                 "sunmute",
                 user,
                 author,
                 reason,
                 until=None,
             )
-        except RuntimeError as e:
-            await ctx.send(e)
-        await ctx.send(_("User has been unmuted in this server."))
+            await ctx.send(_("User has been unmuted in this server."))
 
     async def mute_user(
         self,
@@ -413,7 +418,7 @@ class MuteMixin(MixinMeta):
         if all(getattr(permissions, p) is False for p in new_overs.keys()):
             return False, _(mute_unmute_issues["already_muted"])
 
-        elif not await is_allowed_by_hierarchy(self.bot, self.settings, guild, author, user):
+        elif not await is_allowed_by_hierarchy(self.bot, self.config, guild, author, user):
             return False, _(mute_unmute_issues["hierarchy_problem"])
 
         old_overs = {k: getattr(overwrites, k) for k in new_overs}
@@ -422,10 +427,13 @@ class MuteMixin(MixinMeta):
             await channel.set_permissions(user, overwrite=overwrites, reason=reason)
         except discord.Forbidden:
             return False, _(mute_unmute_issues["permissions_issue"])
+        except discord.NotFound as e:
+            if e.code == 10003:
+                return False, _(mute_unmute_issues["unknown_channel"])
+            elif e.code == 10009:
+                return False, _(mute_unmute_issues["left_guild"])
         else:
-            await self.settings.member(user).set_raw(
-                "perms_cache", str(channel.id), value=old_overs
-            )
+            await self.config.member(user).set_raw("perms_cache", str(channel.id), value=old_overs)
             return True, None
 
     async def unmute_user(
@@ -437,7 +445,7 @@ class MuteMixin(MixinMeta):
         reason: str,
     ) -> (bool, str):
         overwrites = channel.overwrites_for(user)
-        perms_cache = await self.settings.member(user).perms_cache()
+        perms_cache = await self.config.member(user).perms_cache()
 
         if channel.id in perms_cache:
             old_values = perms_cache[channel.id]
@@ -447,7 +455,7 @@ class MuteMixin(MixinMeta):
         if all(getattr(overwrites, k) == v for k, v in old_values.items()):
             return False, _(mute_unmute_issues["already_unmuted"])
 
-        elif not await is_allowed_by_hierarchy(self.bot, self.settings, guild, author, user):
+        elif not await is_allowed_by_hierarchy(self.bot, self.config, guild, author, user):
             return False, _(mute_unmute_issues["hierarchy_problem"])
 
         overwrites.update(**old_values)
@@ -460,6 +468,11 @@ class MuteMixin(MixinMeta):
                 await channel.set_permissions(user, overwrite=overwrites, reason=reason)
         except discord.Forbidden:
             return False, _(mute_unmute_issues["permissions_issue"])
+        except discord.NotFound as e:
+            if e.code == 10003:
+                return False, _(mute_unmute_issues["unknown_channel"])
+            elif e.code == 10009:
+                return False, _(mute_unmute_issues["left_guild"])
         else:
-            await self.settings.member(user).clear_raw("perms_cache", str(channel.id))
+            await self.config.member(user).clear_raw("perms_cache", str(channel.id))
             return True, None

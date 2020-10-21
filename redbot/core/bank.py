@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
-from typing import Union, List, Optional, TYPE_CHECKING
+import logging
+from datetime import datetime, timezone
+from typing import Union, List, Optional, TYPE_CHECKING, Literal
 from functools import wraps
 
 import discord
 
+from redbot.core.utils import AsyncIter
 from redbot.core.utils.chat_formatting import humanize_number
 from . import Config, errors, commands
 from .i18n import Translator
@@ -45,7 +47,10 @@ __all__ = [
 
 _MAX_BALANCE = 2 ** 63 - 1
 
+_SCHEMA_VERSION = 1
+
 _DEFAULT_GLOBAL = {
+    "schema_version": 0,
     "is_global": False,
     "bank_name": "Twentysix bank",
     "currency": "credits",
@@ -64,16 +69,77 @@ _DEFAULT_MEMBER = {"name": "", "balance": 0, "created_at": 0}
 
 _DEFAULT_USER = _DEFAULT_MEMBER
 
-_conf: Config = None
+_config: Config = None
+
+log = logging.getLogger("red.core.bank")
+
+_data_deletion_lock = asyncio.Lock()
 
 
-def _init():
-    global _conf
-    _conf = Config.get_conf(None, 384734293238749, cog_name="Bank", force_registration=True)
-    _conf.register_global(**_DEFAULT_GLOBAL)
-    _conf.register_guild(**_DEFAULT_GUILD)
-    _conf.register_member(**_DEFAULT_MEMBER)
-    _conf.register_user(**_DEFAULT_USER)
+async def _init():
+    global _config
+    _config = Config.get_conf(None, 384734293238749, cog_name="Bank", force_registration=True)
+    _config.register_global(**_DEFAULT_GLOBAL)
+    _config.register_guild(**_DEFAULT_GUILD)
+    _config.register_member(**_DEFAULT_MEMBER)
+    _config.register_user(**_DEFAULT_USER)
+    await _migrate_config()
+
+
+async def _migrate_config():
+    schema_version = await _config.schema_version()
+
+    if schema_version == _SCHEMA_VERSION:
+        return
+
+    if schema_version == 0:
+        await _schema_0_to_1()
+        schema_version += 1
+        await _config.schema_version.set(schema_version)
+
+
+async def _schema_0_to_1():
+    # convert floats in bank balances to ints
+
+    # don't use anything seen below in extensions, it's optimized and controlled for here,
+    # but can't be safe in 3rd party use
+
+    # this CANNOT use ctx manager, because ctx managers compare before and after,
+    # and floats can be equal to ints: (1.0 == 1) is True
+    group = _config._get_base_group(_config.USER)
+    bank_user_data = await group.all()
+    for user_config in bank_user_data.values():
+        user_config["balance"] = int(user_config["balance"])
+    await group.set(bank_user_data)
+
+    group = _config._get_base_group(_config.MEMBER)
+    bank_member_data = await group.all()
+    for guild_data in bank_member_data.values():
+        for member_config in guild_data.values():
+            member_config["balance"] = int(member_config["balance"])
+    await group.set(bank_member_data)
+
+
+async def _process_data_deletion(
+    *, requester: Literal["discord_deleted_user", "owner", "user", "user_strict"], user_id: int
+):
+    """
+    Bank has no reason to keep any of this data
+    if the user doesn't want it kept,
+    we won't special case any request type
+    """
+    if requester not in ("discord_deleted_user", "owner", "user", "user_strict"):
+        log.warning(
+            "Got unknown data request type `{req_type}` for user, deleting anyway",
+            req_type=requester,
+        )
+
+    async with _data_deletion_lock:
+        await _config.user_from_id(user_id).clear()
+        all_members = await _config.all_members()
+        async for guild_id, member_dict in AsyncIter(all_members.items(), steps=100):
+            if user_id in member_dict:
+                await _config.member_from_ids(guild_id, user_id).clear()
 
 
 class Account:
@@ -81,7 +147,7 @@ class Account:
 
     This class should ONLY be instantiated by the bank itself."""
 
-    def __init__(self, name: str, balance: int, created_at: datetime.datetime):
+    def __init__(self, name: str, balance: int, created_at: datetime):
         self.name = name
         self.balance = balance
         self.created_at = created_at
@@ -89,25 +155,25 @@ class Account:
 
 def _encoded_current_time() -> int:
     """Get the current UTC time as a timestamp.
-    
+
     Returns
     -------
     int
         The current UTC timestamp.
 
     """
-    now = datetime.datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return _encode_time(now)
 
 
-def _encode_time(time: datetime.datetime) -> int:
+def _encode_time(time: datetime) -> int:
     """Convert a datetime object to a serializable int.
-    
+
     Parameters
     ----------
     time : datetime.datetime
         The datetime to convert.
-        
+
     Returns
     -------
     int
@@ -118,21 +184,21 @@ def _encode_time(time: datetime.datetime) -> int:
     return ret
 
 
-def _decode_time(time: int) -> datetime.datetime:
+def _decode_time(time: int) -> datetime:
     """Convert a timestamp to a datetime object.
-    
+
     Parameters
     ----------
     time : int
         The timestamp to decode.
-        
+
     Returns
     -------
     datetime.datetime
         The datetime object from the timestamp.
 
     """
-    return datetime.datetime.utcfromtimestamp(time)
+    return datetime.utcfromtimestamp(time)
 
 
 async def get_balance(member: discord.Member) -> int:
@@ -163,6 +229,11 @@ async def can_spend(member: discord.Member, amount: int) -> bool:
     amount : int
         The amount the member wants to spend.
 
+    Raises
+    ------
+    TypeError
+        If the amount is not an `int`.
+
     Returns
     -------
     bool
@@ -170,6 +241,8 @@ async def can_spend(member: discord.Member, amount: int) -> bool:
         amount, else :code:`False`.
 
     """
+    if not isinstance(amount, int):
+        raise TypeError("Amount must be of type int, not {}.".format(type(amount)))
     if _invalid_amount(amount):
         return False
     return await get_balance(member) >= amount
@@ -184,7 +257,6 @@ async def set_balance(member: Union[discord.Member, discord.User], amount: int) 
         The member whose balance to set.
     amount : int
         The amount to set the balance to.
-
     Returns
     -------
     int
@@ -199,8 +271,12 @@ async def set_balance(member: Union[discord.Member, discord.User], amount: int) 
     BalanceTooHigh
         If attempting to set the balance to a value greater than
         ``bank._MAX_BALANCE``.
+    TypeError
+        If the amount is not an `int`.
 
     """
+    if not isinstance(amount, int):
+        raise TypeError("Amount must be of type int, not {}.".format(type(amount)))
     if amount < 0:
         raise ValueError("Not allowed to have negative balance.")
     guild = getattr(member, "guild", None)
@@ -211,9 +287,9 @@ async def set_balance(member: Union[discord.Member, discord.User], amount: int) 
             user=member.display_name, max_balance=max_bal, currency_name=currency
         )
     if await is_global():
-        group = _conf.user(member)
+        group = _config.user(member)
     else:
-        group = _conf.member(member)
+        group = _config.member(member)
     await group.balance.set(amount)
 
     if await group.created_at() == 0:
@@ -376,9 +452,9 @@ async def wipe_bank(guild: Optional[discord.Guild] = None) -> None:
 
     """
     if await is_global():
-        await _conf.clear_all_users()
+        await _config.clear_all_users()
     else:
-        await _conf.clear_all_members(guild)
+        await _config.clear_all_members(guild)
 
 
 async def bank_prune(bot: Red, guild: discord.Guild = None, user_id: int = None) -> None:
@@ -405,16 +481,23 @@ async def bank_prune(bot: Red, guild: discord.Guild = None, user_id: int = None)
     global_bank = await is_global()
 
     if global_bank:
-        _guilds = [g for g in bot.guilds if not g.unavailable and g.large and not g.chunked]
-        _uguilds = [g for g in bot.guilds if g.unavailable]
-        group = _conf._get_base_group(_conf.USER)
+        _guilds = set()
+        _uguilds = set()
+        if user_id is None:
+            async for g in AsyncIter(bot.guilds, steps=100):
+                if not g.unavailable and g.large and not g.chunked:
+                    _guilds.add(g)
+                elif g.unavailable:
+                    _uguilds.add(g)
+        group = _config._get_base_group(_config.USER)
 
     else:
         if guild is None:
             raise BankPruneError("'guild' can't be None when pruning a local bank")
-        _guilds = [guild] if not guild.unavailable and guild.large else []
-        _uguilds = [guild] if guild.unavailable else []
-        group = _conf._get_base_group(_conf.MEMBER, str(guild.id))
+        if user_id is None:
+            _guilds = {guild} if not guild.unavailable and guild.large else set()
+            _uguilds = {guild} if guild.unavailable else set()
+        group = _config._get_base_group(_config.MEMBER, str(guild.id))
 
     if user_id is None:
         await bot.request_offline_members(*_guilds)
@@ -458,7 +541,7 @@ async def get_leaderboard(positions: int = None, guild: discord.Guild = None) ->
 
     """
     if await is_global():
-        raw_accounts = await _conf.all_users()
+        raw_accounts = await _config.all_users()
         if guild is not None:
             tmp = raw_accounts.copy()
             for acc in tmp:
@@ -467,7 +550,7 @@ async def get_leaderboard(positions: int = None, guild: discord.Guild = None) ->
     else:
         if guild is None:
             raise TypeError("Expected a guild, got NoneType object instead!")
-        raw_accounts = await _conf.all_members(guild)
+        raw_accounts = await _config.all_members(guild)
     sorted_acc = sorted(raw_accounts.items(), key=lambda x: x[1]["balance"], reverse=True)
     if positions is None:
         return sorted_acc
@@ -530,9 +613,9 @@ async def get_account(member: Union[discord.Member, discord.User]) -> Account:
 
     """
     if await is_global():
-        all_accounts = await _conf.all_users()
+        all_accounts = await _config.all_users()
     else:
-        all_accounts = await _conf.all_members(member.guild)
+        all_accounts = await _config.all_members(member.guild)
 
     if member.id not in all_accounts:
         acc_data = {"name": member.display_name, "created_at": _DEFAULT_MEMBER["created_at"]}
@@ -556,7 +639,7 @@ async def is_global() -> bool:
         :code:`True` if the bank is global, otherwise :code:`False`.
 
     """
-    return await _conf.is_global()
+    return await _config.is_global()
 
 
 async def set_global(global_: bool) -> bool:
@@ -586,11 +669,11 @@ async def set_global(global_: bool) -> bool:
         return global_
 
     if await is_global():
-        await _conf.clear_all_users()
+        await _config.clear_all_users()
     else:
-        await _conf.clear_all_members()
+        await _config.clear_all_members()
 
-    await _conf.is_global.set(global_)
+    await _config.is_global.set(global_)
     return global_
 
 
@@ -615,9 +698,9 @@ async def get_bank_name(guild: discord.Guild = None) -> str:
 
     """
     if await is_global():
-        return await _conf.bank_name()
+        return await _config.bank_name()
     elif guild is not None:
-        return await _conf.guild(guild).bank_name()
+        return await _config.guild(guild).bank_name()
     else:
         raise RuntimeError("Guild parameter is required and missing.")
 
@@ -645,9 +728,9 @@ async def set_bank_name(name: str, guild: discord.Guild = None) -> str:
 
     """
     if await is_global():
-        await _conf.bank_name.set(name)
+        await _config.bank_name.set(name)
     elif guild is not None:
-        await _conf.guild(guild).bank_name.set(name)
+        await _config.guild(guild).bank_name.set(name)
     else:
         raise RuntimeError("Guild must be provided if setting the name of a guild-specific bank.")
     return name
@@ -674,9 +757,9 @@ async def get_currency_name(guild: discord.Guild = None) -> str:
 
     """
     if await is_global():
-        return await _conf.currency()
+        return await _config.currency()
     elif guild is not None:
-        return await _conf.guild(guild).currency()
+        return await _config.guild(guild).currency()
     else:
         raise RuntimeError("Guild must be provided.")
 
@@ -704,9 +787,9 @@ async def set_currency_name(name: str, guild: discord.Guild = None) -> str:
 
     """
     if await is_global():
-        await _conf.currency.set(name)
+        await _config.currency.set(name)
     elif guild is not None:
-        await _conf.guild(guild).currency.set(name)
+        await _config.guild(guild).currency.set(name)
     else:
         raise RuntimeError(
             "Guild must be provided if setting the currency name of a guild-specific bank."
@@ -735,9 +818,9 @@ async def get_max_balance(guild: discord.Guild = None) -> int:
 
     """
     if await is_global():
-        return await _conf.max_balance()
+        return await _config.max_balance()
     elif guild is not None:
-        return await _conf.guild(guild).max_balance()
+        return await _config.guild(guild).max_balance()
     else:
         raise RuntimeError("Guild must be provided.")
 
@@ -764,7 +847,12 @@ async def set_max_balance(amount: int, guild: discord.Guild = None) -> int:
         If the bank is guild-specific and guild was not provided.
     ValueError
         If the amount is less than 0 or higher than 2 ** 63 - 1.
+    TypeError
+        If the amount is not an `int`.
+
     """
+    if not isinstance(amount, int):
+        raise TypeError("Amount must be of type int, not {}.".format(type(amount)))
     if not (0 < amount <= _MAX_BALANCE):
         raise ValueError(
             "Amount must be greater than zero and less than {max}.".format(
@@ -773,9 +861,9 @@ async def set_max_balance(amount: int, guild: discord.Guild = None) -> int:
         )
 
     if await is_global():
-        await _conf.max_balance.set(amount)
+        await _config.max_balance.set(amount)
     elif guild is not None:
-        await _conf.guild(guild).max_balance.set(amount)
+        await _config.guild(guild).max_balance.set(amount)
     else:
         raise RuntimeError(
             "Guild must be provided if setting the maximum balance of a guild-specific bank."
@@ -804,9 +892,9 @@ async def get_default_balance(guild: discord.Guild = None) -> int:
 
     """
     if await is_global():
-        return await _conf.default_balance()
+        return await _config.default_balance()
     elif guild is not None:
-        return await _conf.guild(guild).default_balance()
+        return await _config.guild(guild).default_balance()
     else:
         raise RuntimeError("Guild is missing and required!")
 
@@ -833,9 +921,12 @@ async def set_default_balance(amount: int, guild: discord.Guild = None) -> int:
         If the bank is guild-specific and guild was not provided.
     ValueError
         If the amount is less than 0 or higher than the max allowed balance.
+    TypeError
+        If the amount is not an `int`.
 
     """
-    amount = int(amount)
+    if not isinstance(amount, int):
+        raise TypeError("Amount must be of type int, not {}.".format(type(amount)))
     max_bal = await get_max_balance(guild)
 
     if not (0 <= amount <= max_bal):
@@ -846,9 +937,9 @@ async def set_default_balance(amount: int, guild: discord.Guild = None) -> int:
         )
 
     if await is_global():
-        await _conf.default_balance.set(amount)
+        await _config.default_balance.set(amount)
     elif guild is not None:
-        await _conf.guild(guild).default_balance.set(amount)
+        await _config.guild(guild).default_balance.set(amount)
     else:
         raise RuntimeError("Guild is missing and required.")
 
@@ -870,7 +961,9 @@ def cost(amount: int):
 
     Other exceptions will propagate and will be handled by Red's (and/or
     any other configured) error handling.
+
     """
+    # TODO: Add documentation for input/output/exceptions
     if not isinstance(amount, int) or amount < 0:
         raise ValueError("This decorator requires an integer cost greater than or equal to zero")
 

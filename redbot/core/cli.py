@@ -42,9 +42,8 @@ async def interactive_config(red, token_set, prefix_set, *, print_header=True):
     if not token_set:
         print(
             "Please enter a valid token.\n"
-            "You can find out how to obtain a token with this guide"
-            ' (section "Creating a Bot Account"):\n'
-            f"https://discordpy.readthedocs.io/en/v{discord_version}/discord.html#creating-a-bot-account"
+            "You can find out how to obtain a token with this guide:\n"
+            "https://docs.discord.red/en/stable/bot_application_guide.html#creating-a-bot-account"
         )
         while not token:
             token = input("> ")
@@ -235,7 +234,7 @@ def parse_cli_flags(args):
         help="Set the maximum number of messages to store in the internal message cache.",
     )
     parser.add_argument(
-        "--no-message-cache", action="store_true", help="Disable the internal message cache.",
+        "--no-message-cache", action="store_true", help="Disable the internal message cache."
     )
 
     args = parser.parse_args(args)

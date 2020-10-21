@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Tuple
 
@@ -70,17 +71,52 @@ class Admin(commands.Cog):
     """A collection of server administration utilities."""
 
     def __init__(self):
-        self.conf = Config.get_conf(self, 8237492837454039, force_registration=True)
+        self.config = Config.get_conf(self, 8237492837454039, force_registration=True)
 
-        self.conf.register_global(serverlocked=False)
+        self.config.register_global(serverlocked=False, schema_version=0)
 
-        self.conf.register_guild(
-            announce_ignore=False,
+        self.config.register_guild(
             announce_channel=None,  # Integer ID
             selfroles=[],  # List of integer ID's
         )
 
         self.__current_announcer = None
+        self._ready = asyncio.Event()
+        asyncio.create_task(self.handle_migrations())
+        # As this is a data migration, don't store this for cancelation.
+
+    async def cog_before_invoke(self, ctx: commands.Context):
+        await self._ready.wait()
+
+    async def red_delete_data_for_user(self, **kwargs):
+        """ Nothing to delete """
+        return
+
+    async def handle_migrations(self):
+
+        lock = self.config.get_guilds_lock()
+        async with lock:
+            # This prevents the edge case of someone loading admin,
+            # unloading it, loading it again during a migration
+            current_schema = await self.config.schema_version()
+
+            if current_schema == 0:
+                await self.migrate_config_from_0_to_1()
+                await self.config.schema_version.set(1)
+
+        self._ready.set()
+
+    async def migrate_config_from_0_to_1(self):
+
+        all_guilds = await self.config.all_guilds()
+
+        for guild_id, guild_data in all_guilds.items():
+            if guild_data.get("announce_ignore", False):
+                async with self.config.guild_from_id(guild_id).all(
+                    acquire_lock=False
+                ) as guild_config:
+                    guild_config.pop("announce_channel", None)
+                    guild_config.pop("announce_ignore", None)
 
     def cog_unload(self):
         try:
@@ -290,14 +326,14 @@ class Admin(commands.Cog):
     async def announce(self, ctx: commands.Context, *, message: str):
         """Announce a message to all servers the bot is in."""
         if not self.is_announcing():
-            announcer = Announcer(ctx, message, config=self.conf)
+            announcer = Announcer(ctx, message, config=self.config)
             announcer.start()
 
             self.__current_announcer = announcer
 
             await ctx.send(_("The announcement has begun."))
         else:
-            prefix = ctx.prefix
+            prefix = ctx.clean_prefix
             await ctx.send(_(RUNNING_ANNOUNCEMENT).format(prefix=prefix))
 
     @announce.command(name="cancel")
@@ -320,31 +356,21 @@ class Admin(commands.Cog):
     async def announceset_channel(self, ctx, *, channel: discord.TextChannel = None):
         """
         Change the channel where the bot will send announcements.
-        
+
         If channel is left blank it defaults to the current channel.
         """
         if channel is None:
             channel = ctx.channel
-        await self.conf.guild(ctx.guild).announce_channel.set(channel.id)
+        await self.config.guild(ctx.guild).announce_channel.set(channel.id)
         await ctx.send(
             _("The announcement channel has been set to {channel.mention}").format(channel=channel)
         )
 
-    @announceset.command(name="ignore")
-    async def announceset_ignore(self, ctx):
-        """Toggle announcements being enabled this server."""
-        ignored = await self.conf.guild(ctx.guild).announce_ignore()
-        await self.conf.guild(ctx.guild).announce_ignore.set(not ignored)
-        if ignored:
-            await ctx.send(
-                _("The server {guild.name} will receive announcements.").format(guild=ctx.guild)
-            )
-        else:
-            await ctx.send(
-                _("The server {guild.name} will not receive announcements.").format(
-                    guild=ctx.guild
-                )
-            )
+    @announceset.command(name="clearchannel")
+    async def announceset_clear_channel(self, ctx):
+        """Unsets the channel for announcements."""
+        await self.config.guild(ctx.guild).announce_channel.clear()
+        await ctx.tick()
 
     async def _valid_selfroles(self, guild: discord.Guild) -> Tuple[discord.Role]:
         """
@@ -352,14 +378,14 @@ class Admin(commands.Cog):
         :param guild:
         :return:
         """
-        selfrole_ids = set(await self.conf.guild(guild).selfroles())
+        selfrole_ids = set(await self.config.guild(guild).selfroles())
         guild_roles = guild.roles
 
         valid_roles = tuple(r for r in guild_roles if r.id in selfrole_ids)
         valid_role_ids = set(r.id for r in valid_roles)
 
         if selfrole_ids != valid_role_ids:
-            await self.conf.guild(guild).selfroles.set(list(valid_role_ids))
+            await self.config.guild(guild).selfroles.set(list(valid_role_ids))
 
         # noinspection PyTypeChecker
         return valid_roles
@@ -427,7 +453,7 @@ class Admin(commands.Cog):
                 ).format(role=role)
             )
             return
-        async with self.conf.guild(ctx.guild).selfroles() as curr_selfroles:
+        async with self.config.guild(ctx.guild).selfroles() as curr_selfroles:
             if role.id not in curr_selfroles:
                 curr_selfroles.append(role.id)
                 await ctx.send(_("Added."))
@@ -449,7 +475,7 @@ class Admin(commands.Cog):
                 ).format(role=role)
             )
             return
-        async with self.conf.guild(ctx.guild).selfroles() as curr_selfroles:
+        async with self.config.guild(ctx.guild).selfroles() as curr_selfroles:
             curr_selfroles.remove(role.id)
 
         await ctx.send(_("Removed."))
@@ -458,8 +484,8 @@ class Admin(commands.Cog):
     @checks.is_owner()
     async def serverlock(self, ctx: commands.Context):
         """Lock a bot to its current servers only."""
-        serverlocked = await self.conf.serverlocked()
-        await self.conf.serverlocked.set(not serverlocked)
+        serverlocked = await self.config.serverlocked()
+        await self.config.serverlocked.set(not serverlocked)
 
         if serverlocked:
             await ctx.send(_("The bot is no longer serverlocked."))
@@ -467,8 +493,9 @@ class Admin(commands.Cog):
             await ctx.send(_("The bot is now serverlocked."))
 
     # region Event Handlers
+    @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
-        if await self.conf.serverlocked():
+        if await self.config.serverlocked():
             await guild.leave()
 
 

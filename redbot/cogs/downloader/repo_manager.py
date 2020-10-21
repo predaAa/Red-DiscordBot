@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import keyword
 import os
 import pkgutil
 import shlex
@@ -37,6 +38,12 @@ from .json_mixins import RepoJSONMixin
 from .log import log
 
 _ = Translator("RepoManager", __file__)
+
+
+DECODE_PARAMS = {
+    "encoding": "utf-8",
+    "errors": "surrogateescape",
+}
 
 
 class Candidate(NamedTuple):
@@ -192,6 +199,11 @@ class Repo(RepoJSONMixin):
         descendant_rev : `str`
             Descendant revision
 
+        Raises
+        ------
+        .UnknownRevision
+            When git cannot find one of the provided revisions.
+
         Returns
         -------
         bool
@@ -206,10 +218,17 @@ class Repo(RepoJSONMixin):
             maybe_ancestor_rev=maybe_ancestor_rev,
             descendant_rev=descendant_rev,
         )
-        p = await self._run(git_command, valid_exit_codes=valid_exit_codes)
+        p = await self._run(git_command, valid_exit_codes=valid_exit_codes, debug_only=True)
 
         if p.returncode in valid_exit_codes:
             return not bool(p.returncode)
+
+        # this is a plumbing command so we're safe here
+        stderr = p.stderr.decode(**DECODE_PARAMS).strip()
+        if stderr.startswith(("fatal: Not a valid object name", "fatal: Not a valid commit name")):
+            rev, *__ = stderr[31:].split(maxsplit=1)
+            raise errors.UnknownRevision(f"Revision {rev} cannot be found.", git_command)
+
         raise errors.GitException(
             f"Git failed to determine if commit {maybe_ancestor_rev}"
             f" is ancestor of {descendant_rev} for repo at path: {self.folder_path}",
@@ -259,7 +278,7 @@ class Repo(RepoJSONMixin):
                 f"Git diff failed for repo at path: {self.folder_path}", git_command
             )
 
-        stdout = p.stdout.strip(b"\t\n\x00 ").decode().split("\x00\t")
+        stdout = p.stdout.strip(b"\t\n\x00 ").decode(**DECODE_PARAMS).split("\x00\t")
         ret = {}
 
         for filename in stdout:
@@ -318,7 +337,7 @@ class Repo(RepoJSONMixin):
                 f"Git log failed for repo at path: {self.folder_path}", git_command
             )
 
-        commit = p.stdout.decode().strip()
+        commit = p.stdout.decode(**DECODE_PARAMS).strip()
         if commit:
             async with self.checkout(f"{commit}~"):
                 return discord.utils.get(self.available_modules, name=module_name)
@@ -426,7 +445,7 @@ class Repo(RepoJSONMixin):
                 git_command,
             )
 
-        return p.stdout.decode().strip()
+        return p.stdout.decode(**DECODE_PARAMS).strip()
 
     async def get_full_sha1(self, rev: str) -> str:
         """
@@ -456,7 +475,7 @@ class Repo(RepoJSONMixin):
         p = await self._run(git_command)
 
         if p.returncode != 0:
-            stderr = p.stderr.decode().strip()
+            stderr = p.stderr.decode(**DECODE_PARAMS).strip()
             ambiguous_error = f"error: short SHA1 {rev} is ambiguous\nhint: The candidates are:\n"
             if not stderr.startswith(ambiguous_error):
                 raise errors.UnknownRevision(f"Revision {rev} cannot be found.", git_command)
@@ -469,7 +488,7 @@ class Repo(RepoJSONMixin):
                 )
             raise errors.UnknownRevision(f"Revision {rev} cannot be found.", git_command)
 
-        return p.stdout.decode().strip()
+        return p.stdout.decode(**DECODE_PARAMS).strip()
 
     def _update_available_modules(self) -> Tuple[Installable, ...]:
         """
@@ -489,6 +508,9 @@ class Repo(RepoJSONMixin):
                     )
         """
         for file_finder, name, is_pkg in pkgutil.iter_modules(path=[str(self.folder_path)]):
+            if not name.isidentifier() or keyword.iskeyword(name):
+                # reject package names that can't be valid python identifiers
+                continue
             if is_pkg:
                 curr_modules.append(
                     Installable(location=self.folder_path / name, repo=self, commit=self.commit)
@@ -530,7 +552,8 @@ class Repo(RepoJSONMixin):
                 self._executor,
                 functools.partial(sp_run, *args, stdout=PIPE, stderr=PIPE, **kwargs),
             )
-            stderr = p.stderr.decode().strip()
+            # logging can't use surrogateescape
+            stderr = p.stderr.decode(encoding="utf-8", errors="replace").strip()
             if stderr:
                 if debug_only or p.returncode in valid_exit_codes:
                     log.debug(stderr)
@@ -657,7 +680,7 @@ class Repo(RepoJSONMixin):
                 f"Could not determine current branch at path: {self.folder_path}", git_command
             )
 
-        return p.stdout.decode().strip()
+        return p.stdout.decode(**DECODE_PARAMS).strip()
 
     async def current_commit(self) -> str:
         """Determine the current commit hash of the repo.
@@ -678,7 +701,7 @@ class Repo(RepoJSONMixin):
         if p.returncode != 0:
             raise errors.CurrentHashError("Unable to determine commit hash.", git_command)
 
-        return p.stdout.decode().strip()
+        return p.stdout.decode(**DECODE_PARAMS).strip()
 
     async def latest_commit(self, branch: Optional[str] = None) -> str:
         """Determine the latest commit hash of the repo.
@@ -709,7 +732,7 @@ class Repo(RepoJSONMixin):
         if p.returncode != 0:
             raise errors.CurrentHashError("Unable to determine latest commit hash.", git_command)
 
-        return p.stdout.decode().strip()
+        return p.stdout.decode(**DECODE_PARAMS).strip()
 
     async def current_url(self, folder: Optional[Path] = None) -> str:
         """
@@ -740,7 +763,7 @@ class Repo(RepoJSONMixin):
         if p.returncode != 0:
             raise errors.NoRemoteURL("Unable to discover a repo URL.", git_command)
 
-        return p.stdout.decode().strip()
+        return p.stdout.decode(**DECODE_PARAMS).strip()
 
     async def hard_reset(self, branch: Optional[str] = None) -> None:
         """Perform a hard reset on the current repo.
@@ -983,8 +1006,8 @@ class RepoManager:
 
     def __init__(self) -> None:
         self._repos: Dict[str, Repo] = {}
-        self.conf = Config.get_conf(self, identifier=170708480, force_registration=True)
-        self.conf.register_global(repos={})
+        self.config = Config.get_conf(self, identifier=170708480, force_registration=True)
+        self.config.register_global(repos={})
 
     async def initialize(self) -> None:
         await self._load_repos(set_repos=True)
@@ -1033,7 +1056,7 @@ class RepoManager:
             url=url, name=name, branch=branch, commit="", folder_path=self.repos_folder / name
         )
         await r.clone()
-        await self.conf.repos.set_raw(name, value=r.branch)
+        await self.config.repos.set_raw(name, value=r.branch)
 
         self._repos[name] = r
 
@@ -1103,7 +1126,7 @@ class RepoManager:
 
         safe_delete(repo.folder_path)
 
-        await self.conf.repos.clear_raw(repo.name)
+        await self.config.repos.clear_raw(repo.name)
         try:
             del self._repos[name]
         except KeyError:
@@ -1130,11 +1153,11 @@ class RepoManager:
     async def update_repos(
         self, repos: Optional[Iterable[Repo]] = None
     ) -> Tuple[Dict[Repo, Tuple[str, str]], List[str]]:
-        """Calls `Repo.update` on passed repositories and 
+        """Calls `Repo.update` on passed repositories and
         catches failing ones.
-        
+
         Calling without params updates all currently installed repos.
-        
+
         Parameters
         ----------
         repos: Iterable
@@ -1145,7 +1168,7 @@ class RepoManager:
         tuple of Dict and list
             A mapping of `Repo` objects that received new commits to
             a 2-`tuple` of `str` containing old and new commit hashes.
-            
+
             `list` of failed `Repo` names
         """
         failed = []
@@ -1182,20 +1205,19 @@ class RepoManager:
             if not folder.is_dir():
                 continue
             try:
-                branch = await self.conf.repos.get_raw(folder.stem, default="")
+                branch = await self.config.repos.get_raw(folder.stem, default="")
                 ret[folder.stem] = await Repo.from_folder(folder, branch)
                 if branch == "":
-                    await self.conf.repos.set_raw(folder.stem, value=ret[folder.stem].branch)
+                    await self.config.repos.set_raw(folder.stem, value=ret[folder.stem].branch)
             except errors.NoRemoteURL:
                 log.warning("A remote URL does not exist for repo %s", folder.stem)
             except errors.DownloaderException as err:
-                log.error("Discarding repo %s due to error.", folder.stem, exc_info=err)
-                shutil.rmtree(
-                    str(folder),
-                    onerror=lambda func, path, exc: log.error(
-                        "Failed to remove folder %s", path, exc_info=exc
-                    ),
-                )
+                log.error("Ignoring repo %s due to error.", folder.stem, exc_info=err)
+                # Downloader should NOT remove the repo on generic errors like this one.
+                # We were removing whole repo folder here in the past,
+                # but it's quite destructive for such a generic error.
+                # We can't **expect** that this error will always mean git repository is broken.
+                # GH-3867
 
         if set_repos:
             self._repos = ret

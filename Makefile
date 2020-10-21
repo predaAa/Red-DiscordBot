@@ -1,10 +1,14 @@
 PYTHON ?= python3.8
 
+ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+
 # Python Code Style
 reformat:
-	$(PYTHON) -m black `git ls-files "*.py"`
+	$(PYTHON) -m black $(ROOT_DIR)
 stylecheck:
-	$(PYTHON) -m black --check `git ls-files "*.py"`
+	$(PYTHON) -m black --check $(ROOT_DIR)
+stylediff:
+	$(PYTHON) -m black --check --diff $(ROOT_DIR)
 
 # Translations
 gettext:
@@ -21,12 +25,7 @@ bumpdeps:
 # Development environment
 newenv:
 	$(PYTHON) -m venv --clear .venv
-	.venv/bin/pip install -U pip setuptools
+	.venv/bin/pip install -U pip setuptools wheel
 	$(MAKE) syncenv
 syncenv:
 	.venv/bin/pip install -Ur ./tools/dev-requirements.txt
-
-# Changelog check
-checkchangelog:
-	bash tools/check_changelog_entries.sh
-	$(PYTHON) -m towncrier --draft

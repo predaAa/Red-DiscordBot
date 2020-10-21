@@ -3,6 +3,7 @@ import time
 from enum import Enum
 from random import randint, choice
 from typing import Final
+import urllib.parse
 import aiohttp
 import discord
 from redbot.core import commands
@@ -22,7 +23,7 @@ _ = T_ = Translator("General", __file__)
 class RPS(Enum):
     rock = "\N{MOYAI}"
     paper = "\N{PAGE FACING UP}"
-    scissors = "\N{BLACK SCISSORS}"
+    scissors = "\N{BLACK SCISSORS}\N{VARIATION SELECTOR-16}"
 
 
 class RPSParser:
@@ -75,6 +76,10 @@ class General(commands.Cog):
         super().__init__()
         self.stopwatches = {}
 
+    async def red_delete_data_for_user(self, **kwargs):
+        """ Nothing to delete """
+        return
+
     @commands.command()
     async def choose(self, ctx, *choices):
         """Choose between multiple options.
@@ -82,7 +87,7 @@ class General(commands.Cog):
         To denote options which include whitespace, you should use
         double quotes.
         """
-        choices = [escape(c, mass_mentions=True) for c in choices]
+        choices = [escape(c, mass_mentions=True) for c in choices if c]
         if len(choices) < 2:
             await ctx.send(_("Not enough options to pick from."))
         else:
@@ -210,9 +215,7 @@ class General(commands.Cog):
     @commands.command()
     async def lmgtfy(self, ctx, *, search_terms: str):
         """Create a lmgtfy link."""
-        search_terms = escape(
-            search_terms.replace("+", "%2B").replace(" ", "+"), mass_mentions=True
-        )
+        search_terms = escape(urllib.parse.quote_plus(search_terms), mass_mentions=True)
         await ctx.send("https://lmgtfy.com/?q={}".format(search_terms))
 
     @commands.command(hidden=True)
@@ -244,19 +247,20 @@ class General(commands.Cog):
     async def serverinfo(self, ctx, details: bool = False):
         """
         Show server information.
-    
-        `details`: Toggle it to `True` to show more information about this server.
+
+        `details`: Shows more information when set to `True`.
         Default to False.
         """
         guild = ctx.guild
         passed = (ctx.message.created_at - guild.created_at).days
         created_at = _("Created on {date}. That's over {num} days ago!").format(
+<<<<<<< HEAD
             date=guild.created_at.strftime("%d %b %Y %H:%M"), num=humanize_number(passed),
-        )
-        online = humanize_number(
+=======
+            date=guild.created_at.strftime("%d %b %Y %H:%M"),
+            num=humanize_number(passed),
             len([m.status for m in guild.members if m.status != discord.Status.offline])
         )
-        total_users = humanize_number(guild.member_count)
         text_channels = humanize_number(len(guild.text_channels))
         voice_channels = humanize_number(len(guild.voice_channels))
         if not details:
@@ -267,8 +271,15 @@ class General(commands.Cog):
             data.add_field(name=_("Voice Channels"), value=voice_channels)
             data.add_field(name=_("Roles"), value=humanize_number(len(guild.roles)))
             data.add_field(name=_("Owner"), value=str(guild.owner))
+<<<<<<< HEAD
             data.set_footer(text=_("Server ID: ") + str(guild.id))
-            if guild.icon_url:
+=======
+            data.set_footer(
+                text=_("Server ID: ")
+                + str(guild.id)
+                + _("  •  Use {command} for more info on the server.").format(
+                    command=f"{ctx.clean_prefix}serverinfo 1"
+                )
                 data.set_author(name=guild.name, url=guild.icon_url)
                 data.set_thumbnail(url=guild.icon_url)
             else:
@@ -276,7 +287,6 @@ class General(commands.Cog):
         else:
 
             def _size(num: int):
-                for unit in ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB"]:
                     if abs(num) < 1024.0:
                         return "{0:.1f}{1}".format(num, unit)
                     num /= 1024.0
@@ -289,15 +299,38 @@ class General(commands.Cog):
                     num /= 1000.0
                 return "{0:.1f}{1}".format(num, "YB")
 
+<<<<<<< HEAD
+=======
+            shard_info = (
+                _("\nShard ID: **{shard_id}/{shard_count}**").format(
+                    shard_id=humanize_number(guild.shard_id + 1),
+                    shard_count=humanize_number(ctx.bot.shard_count),
+                )
+                if ctx.bot.shard_count > 1
+                else ""
+            )
+>>>>>>> upstream/V3/develop
             # Logic from: https://github.com/TrustyJAID/Trusty-cogs/blob/master/serverstats/serverstats.py#L159
             online_stats = {
                 _("Humans: "): lambda x: not x.bot,
                 _(" • Bots: "): lambda x: x.bot,
+<<<<<<< HEAD
                 "\N{LARGE GREEN CIRCLE}": lambda x: x.status == discord.Status.online,
                 "\N{LARGE ORANGE CIRCLE}": lambda x: x.status == discord.Status.idle,
                 "\N{LARGE RED CIRCLE}": lambda x: x.status == discord.Status.do_not_disturb,
                 "\N{MEDIUM WHITE CIRCLE}": lambda x: x.status == discord.Status.offline,
                 "\N{LARGE PURPLE CIRCLE}": lambda x: x.activity == discord.Streaming,
+=======
+                "\N{LARGE GREEN CIRCLE}": lambda x: x.status is discord.Status.online,
+                "\N{LARGE ORANGE CIRCLE}": lambda x: x.status is discord.Status.idle,
+                "\N{LARGE RED CIRCLE}": lambda x: x.status is discord.Status.do_not_disturb,
+                "\N{MEDIUM WHITE CIRCLE}\N{VARIATION SELECTOR-16}": lambda x: (
+                    x.status is discord.Status.offline
+                ),
+                "\N{LARGE PURPLE CIRCLE}": lambda x: any(
+                    a.type is discord.ActivityType.streaming for a in x.activities
+                ),
+>>>>>>> upstream/V3/develop
                 "\N{MOBILE PHONE}": lambda x: x.is_on_mobile(),
             }
             member_msg = _("Users online: **{online}/{total_users}**\n").format(
@@ -354,7 +387,11 @@ class General(commands.Cog):
                 "VERIFIED": _("Verified"),
                 "DISCOVERABLE": _("Server Discovery"),
                 "FEATURABLE": _("Featurable"),
+<<<<<<< HEAD
                 "PUBLIC": _("Public"),
+=======
+                "COMMUNITY": _("Community"),
+>>>>>>> upstream/V3/develop
                 "PUBLIC_DISABLED": _("Public disabled"),
                 "INVITE_SPLASH": _("Splash Invite"),
                 "VIP_REGIONS": _("VIP Voice Servers"),
@@ -367,7 +404,13 @@ class General(commands.Cog):
                 "MEMBER_LIST_DISABLED": _("Member list disabled"),
             }
             guild_features_list = [
+<<<<<<< HEAD
                 f"✅ {name}" for feature, name in features.items() if feature in guild.features
+=======
+                f"\N{WHITE HEAVY CHECK MARK} {name}"
+                for feature, name in features.items()
+                if feature in guild.features
+>>>>>>> upstream/V3/develop
             ]
 
             joined_on = _(
@@ -403,12 +446,20 @@ class General(commands.Cog):
             data.add_field(
                 name=_("Utility:"),
                 value=_(
+<<<<<<< HEAD
                     "Owner: {owner}\nVoice region: {region}\nVerif. level: {verif}\nServer ID: {id}"
+=======
+                    "Owner: {owner}\nVoice region: {region}\nVerif. level: {verif}\nServer ID: {id}{shard_info}"
+>>>>>>> upstream/V3/develop
                 ).format(
                     owner=bold(str(guild.owner)),
                     region=f"**{vc_regions.get(str(guild.region)) or str(guild.region)}**",
                     verif=bold(verif[str(guild.verification_level)]),
                     id=bold(str(guild.id)),
+<<<<<<< HEAD
+=======
+                    shard_info=shard_info,
+>>>>>>> upstream/V3/develop
                 ),
                 inline=False,
             )
@@ -430,7 +481,11 @@ class General(commands.Cog):
                 data.add_field(name=_("Server features:"), value="\n".join(guild_features_list))
             if guild.premium_tier != 0:
                 nitro_boost = _(
+<<<<<<< HEAD
                     "Tier {boostlevel} with {nitroboosters} boosters\n"
+=======
+                    "Tier {boostlevel} with {nitroboosters} boosts\n"
+>>>>>>> upstream/V3/develop
                     "File size limit: {filelimit}\n"
                     "Emoji limit: {emojis_limit}\n"
                     "VCs max bitrate: {bitrate}"
@@ -456,12 +511,14 @@ class General(commands.Cog):
         """
 
         try:
-            url = "https://api.urbandictionary.com/v0/define?term=" + str(word).lower()
+            url = "https://api.urbandictionary.com/v0/define"
+
+            params = {"term": str(word).lower()}
 
             headers = {"content-type": "application/json"}
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers) as response:
+                async with session.get(url, headers=headers, params=params) as response:
                     data = await response.json()
 
         except aiohttp.ClientError:
@@ -478,9 +535,12 @@ class General(commands.Cog):
                 embeds = []
                 for ud in data["list"]:
                     embed = discord.Embed()
-                    embed.title = _("{word} by {author}").format(
+                    title = _("{word} by {author}").format(
                         word=ud["word"].capitalize(), author=ud["author"]
                     )
+                    if len(title) > 256:
+                        title = "{}...".format(title[:253])
+                    embed.title = title
                     embed.url = ud["permalink"]
 
                     description = _("{definition}\n\n**Example:** {example}").format(**ud)
